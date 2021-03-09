@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from copy import deepcopy
 from sklearn.neural_network import MLPClassifier
 import pygame
@@ -6,55 +8,72 @@ import math
 import time
 import pickle
 import datetime
+import json
+import sys  
+import pathlib
+import builtins
 VEC = pygame.math.Vector2
 
 
-class colors:
-    white = (255,)*3
+class Colors:
+    white = (255,) * 3
     red = (255, 0, 0)
-    green = (0, 255, 0)
-    blue = (0, 255, 0)
+    green = (0, 128, 0)
+    blue = (0, 142, 204)
     black = (0, 0, 0)
 
 
 config = dict(
-    planet_radius=75,
-    gravity= 0,  #-0.002,
+    gravity=0,
     land_angle=10,
     land_speed=0.25,
-    delta_angle=1,
+    delta_angle=2,
     thrust=0.01,
-    dt=2, #0.05
-    flat_index = 0,
-    num_ships = 30,
-    planet_center = VEC( 500, 200 ),
-    planet_center2 = VEC( 100, 100 ),
-    speed_multiplier = 1.35,
-    time_limit = 6
+    dt=5,
+    num_ships=10,
+    starting_pos=(20, 20),
+    starting_angle=45,
+    speed_multiplier=1.35,
+    time_limit=5,
+    ship_file=None,
+    default_level='levels\Train\Train2.txt',
+    normalize_fitness=False
 )
 
+TrainingLevels = ['levels\Train\Train1.txt','levels\Train\Train2.txt','levels\Train\Train6.txt','levels\Train\Train4.txt','levels\Train\Train5.txt']
+
+TestingLevels = ['levels\Train\Train3.txt','levels\Train\Train3.txt','levels\Train\Train1.txt','levels\Train\Train2.txt','levels\Train\Train4.txt']
+
+TestingLevels = ['levels\Test\Test3.txt']
+
+theLevels = TrainingLevels
+
+#These are just used for initializing the scikitlearn Neural Networks
+X_train = np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0]])
+y_train = np.array([0,3,1,2])
+
 #Neural Network Structure
-n_inputs = 3
-n_hidden = 4
+n_inputs = 10
+n_hidden = 7
 n_output = 1
 
 #These are used for initializing the scikitlearn Neural Networks
 X = np.zeros(n_inputs)
 X_train = np.array([X,X])
-y_train = np.array(range(n_output+1))  #np.array([0,1])
-
+y_train = np.array(range(n_output + 1))
 
 
 class PygView( object ):
-    def __init__(self, width=1000, height=1000, fps=60):
+    def __init__(self, level, width=1000, height=1000, fps=60 ):
         """Initialize pygame, window, background, font,...
         """
-        
+
         pygame.init()
         pygame.display.set_caption("Press ESC to quit")
+
+        self.level = level
         self.width = width
         self.height = height
-        # self.height = width // 4
         self.screen = pygame.display.set_mode(
             (self.width, self.height),
             pygame.DOUBLEBUF)
@@ -62,16 +81,13 @@ class PygView( object ):
         self.clock = pygame.time.Clock()
         self.fps = fps
         self.font = pygame.font.SysFont('mono', 20, bold=True)
-
-        #config["planet_center"] = VEC( self.width//2, self.height//2 )
-        self.landing_points = self.do_planet(
-            radius=config["planet_radius"],
-            center=config['planet_center'],
-            flat_index = config['flat_index'])
-        self.ship = space_ship( self.screen, self.landing_points )
+        self.planetFinished = False
+        self.planets = []
+        self.landing_points = None
+        self.ship = space_ship( self.screen, self.landing_points, self.level )
         self.ships = []
         for i in range(config['num_ships']):
-            self.ships.append(space_ship( self.screen, self.landing_points ))
+            self.ships.append(space_ship(self.screen, self.landing_points, self.level))
         self.Newships = []
         self.game_over = False
         self.stop_printing = False
@@ -80,13 +96,17 @@ class PygView( object ):
         self.prevShips = []
         self.prevFitness = []
         self.logLst = []
-        
-        self.loadShips()
+        self.nfitnesses = np.zeros(config['num_ships'])
+
+        self.maxes = np.zeros(len(theLevels))
+
+        if config['ship_file'] is not None:
+            self.loadShips()
 
     def loadShips(self):
-        with open('goodShips.pkl', 'rb') as f:
+        with open(config['ship_file'], 'rb') as f:
             lShipData = pickle.load(f)
-        
+
         for i in range(config['num_ships']):
             self.ships[i].mlp.intercepts_[0] = lShipData[-1]['intercepts1']
             self.ships[i].mlp.intercepts_[1] = lShipData[-1]['intercepts2']
@@ -95,7 +115,6 @@ class PygView( object ):
 
     def reset(self):
         self.ship = space_ship( self.screen, self.landing_points )
-        #self.sp = space_ship( self.screen, self.landing_points )
         self.game_over = False
 
     def run(self):
@@ -107,72 +126,134 @@ class PygView( object ):
         while running:
             da = 0
             thrust = 0.0
-            #initialize ship
-            #self.ship = self.ships[count]
-            
-            for j in range(config['num_ships']):
-            self.ships[j].physics(
-                delta_angle=da,
-                thrust=thrust,
-                stop=self.ships[j].crashed)
-            start_time = time.time() 
-            all_crashed = False
-            while all_crashed == False:
-                self.draw_text("Generation:{}".format(self.generation))
-                # Render the planet
-                self.do_planet(
-                    radius=config["planet_radius"],
-                    center=config['planet_center'],
-                    flat_index = config['flat_index'])
-
+            for qqq in range(len(theLevels)):
+                levelfile1 = open( theLevels[qqq] )
+                level1 = json.load( levelfile1 )
+                self.level = deepcopy(level1)
+                
                 for j in range(config['num_ships']):
-                    if(time.time()-start_time > config['time_limit']):
-                        self.ships[j].crashed = True
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            running = False
-                            all_crashed = True
-                        elif event.type == pygame.KEYDOWN:
-                            if event.key == pygame.K_ESCAPE:
+                    self.ships[j].level = deepcopy(self.level)
+                    self.ships[j].physics(
+                            delta_angle=da,
+                            thrust=thrust,
+                            stop=self.ships[j].crashed)
+                
+                self.resetShipLocs()        
+                start_time = time.time()
+                all_crashed = False
+                shipsAlive = 10
+                loopCount = 0
+                while all_crashed == False:
+                    self.draw_text("Generation:{}".format(self.generation))
+                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(qqq+1,len(theLevels),shipsAlive)))
+
+                    # Render the planet
+                    self.do_planet()
+
+                    for j in range(config['num_ships']):
+                        if(time.time()-start_time > config['time_limit']):
+                            self.ships[j].crashed = True
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
                                 running = False
                                 all_crashed = True
-                            if event.key == pygame.K_r:
-                                self.reset()
-                                #self.resetShipLocs()
-                    
-                    keys = pygame.key.get_pressed()
+                            elif event.type == pygame.KEYDOWN:
+                                if event.key == pygame.K_ESCAPE:
+                                    running = False
+                                    all_crashed = True
+                                if event.key == pygame.K_r:
+                                    self.reset()
+                                    #self.resetShipLocs()
 
-                    da = 0
-                    thrust = 0.0
-                    ai_key = self.ships[j].predict()
-                    if ai_key == "left":
-                        da = -config["delta_angle"]
-                    if ai_key == "right":
-                        da = config["delta_angle"]
-                    thrust = config["thrust"]
-                    # Do the physics on the spaceship
-                    self.ships[j].physics(
-                        delta_angle=da,
-                        thrust=thrust,
-                        stop=self.ships[j].crashed )
-                    # Did we land?
-                    if(self.ships[j].check_on_planet() or self.ships[j].check_pos_screen()==False):
-                        self.ships[j].crashed = True
+                        keys = pygame.key.get_pressed()
 
-                    #Run this to update fitness
-                    self.ships[j].updateFitness()
+                        da = 0
+                        thrust = 0.0
+                        ai_key = self.ships[j].predict(self.planets)
+                        if ai_key == "left":
+                            da = -config["delta_angle"]
+                        if ai_key == "right":
+                            da = config["delta_angle"]
+                        thrust = config["thrust"]
 
-                pygame.display.flip()
-                self.screen.blit( self.background, (0, 0) )
+                        if(j==0):
+                            theColor = (255, 0, 0)
+                        elif(j==1):
+                             theColor = (255, 114, 0)
+                        elif(j==2):
+                            theColor = (0, 76, 255)
+                        elif(j==3):
+                            theColor = (0, 114, 255)
+                        elif(j==4):
+                            theColor = (0, 144, 255)
+                        elif(j==5):
+                            theColor = (0, 174, 255)
+                        elif(j==6):
+                            theColor = (0, 200, 255)
+                        elif(j==7):
+                            theColor = (0, 230, 255)
+                        elif(j==8):
+                            theColor = (0, 255, 255)                                
+                        else:
+                            theColor = (0, 255, 255)
 
-                all_crashed = True
-                for j in range(config['num_ships']):
-                    if(self.ships[j].crashed == False):
-                        all_crashed = False
+                        # Do the physics on the spaceship
+                        self.ships[j].physics(
+                            delta_angle=da,
+                            thrust=thrust,
+                            stop=self.ships[j].crashed,
+                            color = theColor )
+                        # Did we land?
+                        if self.ships[j].check_on_planet() or self.ships[j].check_pos_screen()==False:
+                            self.ships[j].crashed = True
+
+                        self.ships[j].updateFitness(self.level['center_white'])
+
+                        if self.ships[j].check_red_planets(self.planets) == False:
+                            self.ships[j].crashed = True
+                            # Give it a mean Penalty.
+                            #self.ships[j].fitness = self.ships[j].fitness + 0.2
+
+                        #Run this again to update fitness
+                        #_ = self.ships[j].predict()
+                        #Run this to update fitness
 
 
-            #self.updateWeights()
-            self.resetShipLocs()
+                    pygame.display.flip()
+                    self.screen.blit( self.background, (0, 0) )
+
+                    shipsAlive = 0
+                    all_crashed = True
+                    for j in range(config['num_ships']):
+                        if(self.ships[j].crashed == False):
+                            all_crashed = False
+                            shipsAlive = shipsAlive + 1 
+
+                    loopCount = loopCount + 1
+
+                #Normalize fitness by the number of loops 
+                fitnesses = []
+                for p in range(config['num_ships']):
+                    fitnesses.append(deepcopy(self.ships[p].fitness2))
+                theMax = max(fitnesses)
+
+                if(theMax > self.maxes[qqq]):
+                    self.maxes[qqq] = theMax
+                else:
+                    theMax = self.maxes[qqq] 
+
+
+                if(config['normalize_fitness'] == True):
+                    fitnesses = np.array(fitnesses) / loopCount
+                
+                self.nfitnesses = self.nfitnesses + np.array(fitnesses)
+
+
+            self.updateWeights()
+                #for mm in range(config['num_ships']):
+                #    self.ships[mm].level = deepcopy(self.level)
+                #self.resetShipLocs()
+
         pygame.quit()
 
     def mutate(self,mlp):
@@ -181,23 +262,23 @@ class PygView( object ):
         #The MLP Neural network for this ship
         NN = deepcopy(mlp)
 
-        #Store shape information for reconstruction
+        # Store shape information for reconstruction
         s0 = len(NN.intercepts_[0])
         s1 = len(NN.intercepts_[1])
         s2 = NN.coefs_[0].shape
         s3 = NN.coefs_[1].shape
 
-        #Combine all weights into one array
+        # Combine all weights into one array
         intercepts= np.concatenate( (NN.intercepts_[0],NN.intercepts_[1]))
         weights1 = NN.coefs_[0].flatten()
         weights2 = NN.coefs_[1].flatten()
         allWeights = np.concatenate((weights1,weights2))
 
-        #Mutate anywhere from 5% to %20
-        num_m_weights = 1;#int((np.random.rand()*0.10+0.05)*len(allWeights))
-        num_m_intercepts = int(np.round(np.random.rand()));# int((np.random.rand()*0.10+0.05)*len(intercepts))
+        # Mutate anywhere from 5% to %20
+        num_m_weights = int(np.round((np.random.rand()*0.15+0.05) * len(allWeights))) #int((np.random.rand()*0.10+0.05)*len(allWeights))
+        num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05) * len(intercepts))) * int(np.round(np.random.rand()))#int(np.round(np.random.rand()));# int((np.random.rand()*0.10+0.05)*len(intercepts))
 
-        #Array of indices to mutate
+        # Array of indices to mutate
         m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
         m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
 
@@ -263,8 +344,10 @@ class PygView( object ):
 
         #Crossover anywhere from 20% to %60
         #Number of weights and intercepts to crossover
-        num_m_weights = 1 #int( np.ceil( (np.random.rand()*0.1)*len(allWeights)) )
-        num_m_intercepts = int(np.round(np.random.rand())); #np.round((np.random.rand()*0.1)*len(intercepts))
+        #num_m_weights = 3 #int( np.ceil( (np.random.rand()*0.1)*len(allWeights)) )
+        #num_m_intercepts = int(np.round(np.random.rand())); #np.round((np.random.rand()*0.1)*len(intercepts))
+        num_m_weights = int(np.round((np.random.rand()*0.15+0.05)  * len(allWeights))) #int((np.random.rand()*0.10+0.05)*len(allWeights))
+        num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05)  * len(intercepts))) * int(np.round(np.random.rand()+0.3))
 
         m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
         m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
@@ -290,41 +373,47 @@ class PygView( object ):
 
         return deepcopy(NN)
 
-
     def updateWeights(self):
         newShips = []
-        
+
         scores = np.zeros(config['num_ships'])
         for i in range(config['num_ships']):
-            scores[i] = deepcopy(self.ships[i].fitness)
+            scores[i] = deepcopy(self.nfitnesses[i]) #deepcopy(self.ships[i].fitness2)
 
-        scores_sort = np.sort(scores)
+        scores_sort = np.sort(scores)[::-1]
         #Invert. Make highest scores to Lowest
-        scores_sort = 1/scores_sort
+        #scores_sort = 1/scores_sort
 
-        if(scores_sort[0]> self.bestScore):
+        reject = True
+        if(scores_sort[0]>= self.bestScore):
             self.bestScore = scores_sort[0]
-        scores_sort_ind = scores.argsort()
+            reject = False
+        scores_sort_ind = scores.argsort()[::-1] #Descending order (highest to lowest)
 
         ##### PRINT STUFF #####
         print("")
         print("Generation: " , self.generation)
-
+        for i in range(config['num_ships']):
+            print("Ship Score:",scores[scores_sort_ind[i]],self.ships[scores_sort_ind[i]].fitnessDebug, "Weight:")
 
         #If we did worse than before, reject this generation
+
+        
         reject = False
-        if(scores_sort[0]<self.bestScore):
+        if reject:
             scores = np.zeros(config['num_ships'])
             for i in range(config['num_ships']):
                 scores[i] = deepcopy(self.prevFitness[i])
                 self.ships[i].mlp = deepcopy(self.prevShips[i])
-                self.ships[i].fitness = deepcopy(self.prevFitness[i])
 
-            scores_sort = np.sort(scores)
+
+                #self.ships[i].fitness2 = deepcopy(self.prevFitness[i])
+
+            scores_sort = np.sort(scores)[::-1]
             #Invert. Make highest scores to Lowest
-            scores_sort = 1/scores_sort
+            #scores_sort = 1/scores_sort
             print("Generation Rejected")
-            reject = True
+            
         
         self.generation = self.generation + 1
         for i in range(config['num_ships']):
@@ -347,7 +436,7 @@ class PygView( object ):
                     'intercepts2': NN1.intercepts_[1],
                     'Generation': self.generation,
                     'timestamp': datetime.datetime.now(),
-                    'score':self.ships[scores_sort_ind[i]].fitness
+                    'score':scores[scores_sort_ind[i]]
                 }
                 self.logLst.append(logdict)
                 fname = "best.pkl"
@@ -356,14 +445,14 @@ class PygView( object ):
                 with open(fname, 'wb') as pfd:
                     pickle.dump(  self.logLst, pfd )
 
-            print("Ship Score:",self.ships[scores_sort_ind[i]].fitness,"Weight:" , weightSum)
+            
         #print(self.bestScore)
         #########################
 
 
         # Sort the scores from low value to high values
         # Low values indicate a better score (Closer to landing zone)
-        scores_sort_ind = scores.argsort()
+        scores_sort_ind = scores.argsort()[::-1]
         sortedShips = []
         for i in range(config['num_ships']):
             sortedShips.append( deepcopy(self.ships[scores_sort_ind[i]].mlp))
@@ -395,16 +484,25 @@ class PygView( object ):
 
             newShips.append(deepcopy(theNewMlp))
 
-   
+
 
         #Save the previous ships incase all the new ships are worse
-        self.prevShips = []
-        self.prevFitness = []
+        #We don't currently need this because we're always carrying the
+        #best ships to the next round
+        if(reject == False):
+            self.prevShips = []
+            self.prevFitness = []
+            for i in range(len(self.ships)):
+                self.prevShips.append( deepcopy(self.ships[i].mlp))
+                self.prevFitness = deepcopy(self.nfitnesses)
+
+
         for i in range(len(self.ships)):
-            self.prevShips.append( deepcopy(self.ships[i].mlp))
-            self.prevFitness.append( deepcopy(self.ships[i].fitness))
             self.ships[i].mlp = deepcopy(newShips[i])
-    
+            self.ships[i].fitnessDebug = 0
+
+        self.nfitnesses = np.zeros(config['num_ships'])
+
 
     def draw_text( self, text ):
         """
@@ -415,65 +513,94 @@ class PygView( object ):
         self.screen.blit(
             surface, ( ( self.width - fw ), ( self.height - fh )) )
 
-    def do_planet(self, radius, center=(200, 200), flat_index=0):
+    def draw_text_top( self, text ):
+        """
+        """
+        fw, fh = self.font.size(text)  # fw: font width,  fh: font height
+        surface = self.font.render( text, True, (0, 255, 0) )
+        # // makes integer division in python3
+        self.screen.blit(
+            surface, ( ( self.width - fw ), ( 20 - fh )) )
+
+    def do_planet( self ):
         """Draw the planet including the gaussian noise
         to simulate erruptions"""
 
-        # angle in radians between points defining the planet
-        res = 0.01
-
-        # numer of points defining the planet
-        npoints = int( 2*math.pi//res + 1)
-        thetas = np.arange(0, 2*math.pi, res)
-        plist = np.zeros((npoints, 2))
-
-        # the landing part of the planet
-        fi0 = flat_index % npoints
-        fi1 = ( flat_index + npoints//10 ) % npoints
-
-        landform = np.random.normal( scale=2, size=( npoints, 2) )
-        landform[ fi0:fi1, : ] = 0
-        plist[:, 0] = center[0] + radius*np.cos( thetas )
-        plist[:, 1] = center[1] + radius*np.sin( thetas )
+        if self.level["radius_white"] != 0:
+            # angle in radians between points defining the planet
+            res = 0.01
 
 
-        pygame.draw.polygon( self.screen, colors.white, plist + landform )
+            # numer of points defining the planet
+            npoints = int( 2*math.pi//res + 1)
+            thetas = np.arange(0, 2*math.pi, res)
+            plist = np.zeros((npoints, 2))
 
-        return plist[ fi0:fi1, : ]
+            landform = np.random.normal( scale=2, size=( npoints, 2) )
+
+            plist[:, 0] = self.level["center_white"][0] + self.level["radius_white"]*np.cos(thetas)
+            plist[:, 1] = self.level["center_white"][1] + self.level["radius_white"]*np.sin(thetas)
+
+
+
+            pygame.draw.circle(self.screen, Colors.white, self.level["center_white"], self.level["radius_white"])
+
+
+        radii = self.level['radii_red']
+        centers = self.level['centers_red']
+
+
+        self.planets = []
+        for i in range(len(centers)):
+            np_center = VEC(centers[i])
+            rp = red_planet( self.screen, np_center, radii[i]  )
+            self.planets.append(rp)
+            self.planets[i].render()
+
+
+
+        return None
 
     def resetShipLocs(self):
         """Reset the ship locations, but not their neural net weights"""
 
         for i in range(config['num_ships']):
-            self.ships[i].pos = VEC((150, 150))
-            self.ships[i].angle = 90
+            self.ships[i].pos = self.level['ship']['starting_pos']
+            self.ships[i].angle = self.level["ship"]['starting_angle']
             self.ships[i].velocity = VEC(0, 0)
             self.ships[i].crashed = False
-            #self.ship.fitness = 0
+            self.ships[i].fitness2 = 0
+            self.ships[i].sawTheGoodPlanet = False
+            self.ships[i].donezo = False
 
 class space_ship:
-    """The space shipe class"""
-    def __init__(self, screen, landing_points, pos=(150, 150), angle=90 ):
-        self.pos = VEC( pos )
-        self.angle = angle
+    """The space ship class"""
+    def __init__(self, screen, landing_points, level  ):
+        self.level = level
+        self.pos = self.level['ship']['starting_pos']
+        self.angle = self.level['ship']['starting_angle']
         self.screen = screen
         self.velocity = VEC(0, 0)
         self.landing_points = landing_points
         self.crashed = False
         self.fitness = 0
         self.inputs = np.zeros(n_inputs)
-
+        self.fitness2 = 0
+        self.fitnessDebug = 0
         # find mid point of landing
-        li = landing_points.shape[0]//2
-        self.mid_landing_point = VEC(list(self.landing_points[li]))
+        #li = landing_points.shape[0]//2
+        #self.mid_landing_point = VEC(list(self.landing_points[li]))
+        self.sawTheGoodPlanet = False
+        self.donezo = False
 
+        '''
         # VEC can't be instantiated with array
         # so we convert to list
         lp0 = VEC(list(self.landing_points[0])) -  config["planet_center"]
         lpf = VEC(list(self.landing_points[-1])) - config["planet_center"]
         self.la0 = lp0.angle_to(VEC(1, 0))
         self.laf = lpf.angle_to(VEC(1, 0))
-
+        '''
 
 
         self.mlp = MLPClassifier(hidden_layer_sizes=(n_hidden),max_iter=1, activation = "tanh")
@@ -484,61 +611,328 @@ class space_ship:
         self.mlp.intercepts_[1] = np.random.rand(n_output)*2-1
         self.mlp.coefs_[0] = np.random.rand(n_inputs,n_hidden)*2-1
         self.mlp.coefs_[1] = np.random.rand(n_hidden,n_output)*2-1
-        self.minDLandStrip = None
+
         self.debug = False
 
-    def updateFitness(self):
+    def validShipPos(self):
+        if(self.tip[0] > 0 and self.tip[0] < 1000 and self.tip[1] > 0 and self.tip[1] < 800 and
+           self.left[0] > 0 and self.left[0] < 1000 and self.left[1] > 0 and self.left[1] < 800 and
+           self.right[0] > 0 and self.right[0] < 1000 and self.right[1] > 0 and self.right[1] < 800
+            ):
+            return True
+        else:
+            return False
+        
+
+    def updateFitness(self,planetCenter):
         ########Update the ships fitness value###############
         # Fitness is defined as the distance from the landing strip, dLandStrip
-        self.fitness = self.inputs[2]
+        maxD = VEC(1000,800).length()
+        bad_distances = 0
+        good_distances = 0
+        badCount = 0
+        goodCount = 0
 
-    def predict(self):
+        distances = self.inputs[range(5)]
+        bad = self.inputs[range(5,10)]
 
-        #########Calculate Inputs for neural network##########
-        ship_coors = self.pos
-        land_coors = self.landing_points[0]
-        ship_angle = self.angle%360
-        dSurface = (ship_coors - config["planet_center"]).length() - config["planet_radius"]
-        dLandStrip = (ship_coors - self.mid_landing_point).length()
+        bad_inds = np.where(bad == 1)[0]
+        bad_distances = distances[bad_inds]
+        bad_distances = np.min(bad_distances)
+
+        if self.validShipPos() == True:
+            good_inds = np.where(bad == 0)[0]
+            if(len(good_inds) !=0):
+                good_distances = distances[good_inds]
+                good_distances = np.min(good_distances)
+                good_distances = 1/good_distances
+                good_distances = good_distances * maxD
+
+                if(good_distances > 50):
+                    good_distances = 50
+
+                self.fitnessDebug = self.fitnessDebug + good_distances
+                self.fitness2 = self.fitness2 + bad_distances + good_distances
+                self.sawTheGoodPlanet = True
+            else:
+                self.fitness2 = self.fitness2 + bad_distances
+        else:
+            self.fitness2 = self.fitness2 + 1
+
+
+        #If we see the planet (once) double my current fitness score. 
+        #Encourages ships to come into view of the good planet
+        #if(self.sawTheGoodPlanet == True and self.donezo == False):
+            #self.fitness2 = self.fitness2 * 2
+            #self.donezo = True
+
+        #########Calculate Inputs for fitness##########
+        #ship_coors = self.pos
+        #dPlanet = (ship_coors - planetCenter).length()
 
         #########Normalize inputs, want 0 to 1 range########
+        #maxD = VEC(1000,800).length()
+        #dPlanet = dPlanet/maxD
 
-        ship_angle = ship_angle/360
+        #self.fitness = dPlanet
+
+    def predict(self,red_planets):
+        string_output = "none"
+        X = self.calcInputs(red_planets)
+
+        #########Normalize inputs, want 0 to 1 range########
+        self.inputs = deepcopy(X)
         maxD = VEC(1000,800).length()
-        dSurface = dSurface/maxD
-        dLandStrip = dLandStrip/maxD
-        minDLandStrip = self.minDLandStrip/maxD
+        X[range(5)] = X[range(5)]/maxD
 
         #########Make prediction based on inputs##########
-        string_output = "none"
-        X = np.array([ship_angle,dSurface,dLandStrip])
-        self.inputs = X 
         output = self.mlp.predict(X.reshape(1,-1))[0]
-
         if(output==0):
             string_output = "left"
         elif(output==1):
             string_output = "right"
         return string_output
 
+    def calcInputs(self,red_planets):
+        avoidObject = np.zeros(5)
+        objectDistances = np.zeros(5)
+        #For each direction
+        for i in range(5):
+            #For each planet (+1 is for the good planet)
+            allObjDistances = []
+            for j in range(len(red_planets)+1):
+                distFromEdge = self.wallIntercept(i)
+                #avoidObject[i] = 1
+                if(j!=len(red_planets)):#If we're not equal to the last planet (that's the good one)
+                    #red_planets[j][0] is the planet center
+                    dist = self.circleIntercept(i,red_planets[j][0],red_planets[j][1])
+                    if(dist == -1):
+                        dist = distFromEdge
+                    allObjDistances.append(dist)
+                else:
+                    #Make the last planet the good one
+                    center = np.array(*[self.level['center_white']])
+                    dist = self.circleIntercept(i,center, self.level['radius_white'])
+                    if(dist == -1):
+                        dist = 99999
+                    # if we set the white planet radius
+                    # to 0 we ignore the white planet
+                    # in the fitness function.
+                    if self.level['radius_white'] != 0:
+                        allObjDistances.append(dist)
+                    else:
+                        allObjDistances.append(99999)
+            objectDistances[i] = min(allObjDistances)
+            ind = allObjDistances.index(objectDistances[i])
+            if(ind != len(red_planets)):
+                avoidObject[i] = 1
+
+        return np.concatenate((objectDistances,avoidObject))
+
+
+    def wallIntercept(self,direction):
+            #m is the slope of the line. Used to describe line in direction of ship
+            #direction = 4
+
+            if(direction ==0):
+                #straight
+                m = self.tip - self.back
+                x, y = self.tip[0],self.tip[1]
+            if(direction == 1):
+                #left
+                m = self.left - self.right
+                x, y = self.left[0],self.left[1]
+            if(direction == 2):
+                #right
+                m = self.right - self.left
+                x, y = self.right[0],self.right[1]
+            if(direction == 3):
+                #left-staight
+                m = (self.left + self.tip)/2 - self.right
+                x, y = ((self.left + self.tip)/2)[0],((self.left + self.tip)/2)[1]
+            if(direction == 4):
+                #right-straight
+                m = (self.right + self.tip)/2 - self.left
+                x, y = ((self.right + self.tip)/2)[0],((self.right + self.tip)/2)[1]
+            #Don't want to divide by zero, so just give m a really high value if x in y/x is 0
+            if(m[0]==0):
+                m=999999
+            else:
+                m = m[1]/m[0]
+
+            """ m_lw = the slope of the line that describes the left wall of the game world  """
+            m_lw = 999999
+            m_rw = 999999
+            m_bw = 0
+            m_tw = 0
+
+            """rw = rightWall, lw = leftWall, bw = bottomWall, tw = topWall"""
+            x_lw, y_lw = 0,0
+            x_rw, y_rw = 1000,0
+            x_bw, y_bw = 1000,800
+            x_tw, y_tw = 1000,0
+
+            m_walls = [m_lw,m_rw,m_bw,m_tw]
+            x_w = [x_lw,x_rw,x_bw,x_tw]
+            y_w = [y_lw,y_rw,y_bw,y_tw]
+
+            lDistances = []
+            for ii in range(4):
+                if(m - m_walls[ii] == 0):
+                    x_i = 999999
+                else:
+                    x_i = (m*x - y - m_walls[ii]*x_w[ii] + y_w[ii])/(m - m_walls[ii])
+
+                y_i = m*(x_i - x) + y
+
+                dist = (VEC(x_i,y_i) - VEC(x, y)).length()
+
+                if(dist != -1):
+                    if(direction == 0):
+                        #straight
+                        if (self.back - VEC(x_i,y_i)).length() < (self.tip - VEC(x_i,y_i)).length():
+                            dist = -1
+                    if(direction == 1):
+                        #left
+                        if (self.right - VEC(x_i,y_i)).length() < (self.left - VEC(x_i,y_i)).length():
+                            dist = -1
+                    if(direction == 2):
+                        #right
+                        if (self.left - VEC(x_i,y_i)).length() < (self.right - VEC(x_i,y_i)).length():
+                            dist = -1
+                    if(direction == 3):
+                        #left-staight
+                        if (self.right - VEC(x_i,y_i)).length() < ((self.left + self.tip)/2 - VEC(x_i,y_i)).length():
+                            dist = -1
+                    if(direction == 4):
+                        #right-straight
+                        if (self.left - VEC(x_i,y_i)).length() < ((self.right + self.tip)/2 - VEC(x_i,y_i)).length():
+                            dist = -1
+                if(dist != -1):
+                    lDistances.append(dist)
+
+            #For some reason, it didn't get any distances once. This will prevent the game from crashing if that happens
+            if len(lDistances) == 0:
+                lDistances.append(1)
+                #print("Bug!")
+            return np.min(lDistances)
+
+    def circleIntercept(self,direction,planetCenter,planetRadius):
+        """https://math.stackexchange.com/questions/228841/how-do-i-calculate-the-intersections-of-a-straight-line-and-a-circle"""
+
+        #m is the slope of the line. c is the y intercept. used to describe line in direction of ship
+        #direction = 4
+
+        if(direction == 0):
+            #straight
+            m = self.tip - self.back
+            lineStart = self.tip
+        if(direction == 1):
+            #left
+            m = self.left - self.right
+            lineStart = self.left
+        if(direction == 2):
+            #right
+            m = self.right - self.left
+            lineStart = self.right
+        if(direction == 3):
+            #left-staight
+            m = (self.left + self.tip)/2 - self.right
+            lineStart = (self.left + self.tip)/2
+        if(direction == 4):
+            #right-straight
+            m = (self.right + self.tip)/2 - self.left
+            lineStart = (self.right + self.tip)/2
+        #Don't want to divide by zero, so just give m a really high value if x in y/x is 0
+        if(m[0]==0):
+            m=999999
+        else:
+            m = m[1]/m[0]
+
+        #We want left and right 'seeing directions' to be at the back of the ship
+        c = lineStart[1] - m * lineStart[0]
+
+
+        p = planetCenter[0]  #config['planet_center'][0]
+        q = planetCenter[1]  #config['planet_center'][1]
+        r = planetRadius #config['planet_radius']
+
+        A = m**2 + 1
+        B = 2*(m*c - m*q - p)
+        C = q**2-r**2+p**2-2*c*q+c**2
+
+        #If B^2−4AC<0 then the line misses the circle
+        #If B^2−4AC=0 then the line is tangent to the circle.
+        #If B^2−4AC>0 then the line meets the circle in two distinct points.
+        if(B**2 - 4*A*C < 0):
+            x = -1
+            y = -1
+            dist = -1
+        elif(B**2 - 4*A*C == 0 ):
+            x = -B/(2*A)
+            y = m*x + c
+            dist = (VEC(x,y) - VEC(lineStart[0],lineStart[1])).length()
+        else:
+            x1 = (-B + np.sqrt(B**2 - 4*A*C))/(2*A)
+            x2 = (-B - np.sqrt(B**2 - 4*A*C))/(2*A)
+            y1 = m*x1 + c
+            y2 = m*x2 + c
+
+            l1 = (VEC(x1,y1) - VEC(lineStart[0],lineStart[1])).length()
+            l2 = (VEC(x2,y2) - VEC(lineStart[0],lineStart[1])).length()
+
+            #Pick the point on the circle that is closest to the ship
+            if(l1 < l2):
+                x = x1
+                y = y1
+                dist = l1
+            else:
+                x = x2
+                y = y2
+                dist = l2
+
+        #Check to make sure the line intercepts the circle on the front side of the ship
+        if(dist != -1):
+            if(direction ==0):
+                #straight
+                if (self.back - VEC(x,y)).length() < (self.tip - VEC(x,y)).length():
+                    dist = -1
+            if(direction == 1):
+                #left
+                if (self.right - VEC(x,y)).length() < (self.left - VEC(x,y)).length():
+                    dist = -1
+            if(direction == 2):
+                #right
+                if (self.left - VEC(x,y)).length() < (self.right - VEC(x,y)).length():
+                    dist = -1
+            if(direction == 3):
+                #left-staight
+                if (self.right - VEC(x,y)).length() < ((self.left + self.tip)/2 - VEC(x,y)).length():
+                    dist = -1
+            if(direction == 4):
+                #right-straight
+                if (self.left - VEC(x,y)).length() < ((self.right + self.tip)/2 - VEC(x,y)).length():
+                    dist = -1
+        return dist
 
     def render(self, color ):
 
         tip = VEC( 10, 0)
-        left = VEC(-5, 5)
-        right = VEC(-5, -5)
+        left = VEC(-5, -5)
+        right = VEC(-5, 5)
 
         for pt in (tip, right, left):
             pt.rotate_ip( self.angle )
             pt += self.pos
         pygame.draw.polygon(self.screen, color, ( tip, left, right ) )
 
+        self.back = (left + right)/2
         self.tip, self.left, self.right = tip, left, right
 
-    def physics( self, thrust=0.0, delta_angle=0.0, stop=False ):
-        ppos =  config["planet_center"]
+    def physics(self, thrust=0.0, delta_angle=0.0, stop=False, color = Colors.blue):
+        ppos =  self.level['center_white']
 
-        gravity = config["gravity"]*(self.pos-ppos).normalize()
+        # gravity = config["gravity"]*(self.pos-ppos).normalize()
         dt = config["dt"]
         if not stop:
             thrust_vector = VEC(1, 0).rotate(self.angle)*thrust
@@ -548,15 +942,12 @@ class space_ship:
             self.pos = self.pos + self.velocity*dt
             self.angle += delta_angle
 
+        '''
         if thrust == 0:
             color = colors.green
         else:
-            color = colors.red
-
-        if self.minDLandStrip is None:
-            self.minDLandStrip = (self.pos - self.mid_landing_point).length()
-        elif self.minDLandStrip > (self.pos - self.mid_landing_point).length():
-            self.minDlandStrip = (self.pos - self.mid_landing_point).length()
+            color = colors.blue
+        '''
 
         self.render( color )
 
@@ -572,19 +963,18 @@ class space_ship:
         else:
             return False
 
+    def check_red_planets(self, rps):
+        for (ppos, rad) in rps:
+            if (self.tip - ppos).length() < rad:
+                return False
+
+        return True
+
+
+
     def check_speed(self):
         if self.velocity.length() < config["land_speed"]:
             return True
-        else:
-            return False
-
-    def check_land_spot( self ):
-        planet_angle = (self.pos - config["planet_center"]).angle_to(VEC(1, 0))
-        #print(self.la0," ", self.laf, " " ,  planet_angle )
-        if self.la0 <= planet_angle <= self.laf \
-                or self.laf <= planet_angle <= self.la0:
-            return True
-
         else:
             return False
 
@@ -600,33 +990,94 @@ class space_ship:
         # we have landed
         for pt in (self.tip, self.left, self.right):
 
-            if (pt - config["planet_center"]).length()\
-                    < config["planet_radius"]:
+            if (pt - VEC( self.level["center_white"] ) ).length()\
+                    < self.level["radius_white"]:
                 return True
         return False
-
+    
     def NN_Inputs(self):
         ship_coors = self.tip
         land_coors = self.landing_points[0]
-
+        
         ship_angle = self.angle%360
-        dSurface = (ship_coors - config["planet_center"]).length() - config["planet_radius"]
+        dSurface = (ship_coors - config["planet_center"]).length() - config["planet_radius"]        
         dLandStrip = (ship_coors - land_coors).length()
-
+        
         #Normalize inputs, want -1 to 1 range
         ship_angle = ship_angle/360 * 2 - 1
         maxD = VEC(1000,800).length()
         dSurface = dSurface/maxD*2 - 1
         dLandStrip = dLandStrip/maxD*2 - 1
-
-
+        
+        
         return ship_angle,dSurface,dLandStrip
+        
 
 
+
+
+class red_planet:
+
+    def __init__( self, screen, center, radius ):
+        self.screen = screen
+        self.radius = radius
+        self.center = center
+        self.idx = 0
+
+    def render( self ):
+        """
+        # angle in radians between points defining the planet
+        res = 0.01
+
+
+        # numer of points defining the planet
+
+        npoints = int( 2*math.pi//res + 1)
+        thetas = np.arange(0, 2*math.pi, res)
+        plist = np.zeros((npoints, 2))
+
+        landform = np.random.normal( scale=5, size=( npoints, 2) )
+
+        plist[:, 0] = self.center[0] + self.radius*np.cos(thetas)
+        plist[:, 1] = self.center[1] + self.radius*np.sin(thetas)
+
+        pygame.draw.polygon (self.screen, colors.red, plist+landform  )"""
+        pygame.draw.circle(self.screen, Colors.red, np.int64(self.center), self.radius)
+
+    def __getitem__( self, key ):
+        if key == 0:
+            return self.center
+
+        elif key == 1:
+            return self.radius
+
+        raise KeyError("red planet index must be 0 or 1 not ", key )
+
+    def __iter__( self ):
+        self.idx = 0
+        return self
+
+    def __next__(self):
+        try:
+            item = (self.center, self.radius)[self.idx]
+        except IndexError:
+            raise StopIteration("Iter error")
+        self.idx +=1
+        return item
+
+
+def open(path, *args, **kwargs):
+    wpath = pathlib.PureWindowsPath(path)
+    return builtins.open(str(pathlib.Path(wpath)), *args, **kwargs )
 
 # End win condition methods.
 if __name__ == '__main__':
+    if len(sys.argv) == 2:
+        levelfile = open( sys.argv[1] )
+    else:
+        levelfile = open( config['default_level'] )
 
-    #If we want to run the game without rendering to the screen
-    PygView(1000, 800).run()
-        
+    level = json.load( levelfile )
+    # call with width of window and fps
+    PygView(level, 1000, 800).run()
+
