@@ -14,11 +14,11 @@ import builtins
 VEC = pygame.math.Vector2
 
 
-class colors:
-    white = (255,)*3
+class Colors:
+    white = (255,) * 3
     red = (255, 0, 0)
-    green = (0,128,0)
-    blue = (0,142,204)
+    green = (0, 128, 0)
+    blue = (0, 142, 204)
     black = (0, 0, 0)
 
 
@@ -52,7 +52,6 @@ theLevels = TrainingLevels
 #These are just used for initializing the scikitlearn Neural Networks
 X_train = np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0]])
 y_train = np.array([0,3,1,2])
- 
 
 #Neural Network Structure
 n_inputs = 10
@@ -62,8 +61,7 @@ n_output = 1
 #These are used for initializing the scikitlearn Neural Networks
 X = np.zeros(n_inputs)
 X_train = np.array([X,X])
-y_train = np.array(range(n_output+1))  #np.array([0,1])
-
+y_train = np.array(range(n_output+1))
 
 
 class PygView( object ):
@@ -86,7 +84,6 @@ class PygView( object ):
         self.fps = fps
         self.font = pygame.font.SysFont('mono', 20, bold=True)
         self.planetFinished = False
-        #config["planet_center"] = VEC( self.width//2, self.height//2 )
         self.planets = []
         self.landing_points = None #self.do_planet()
         self.ship = space_ship( self.screen, self.landing_points, self.level )
@@ -108,7 +105,6 @@ class PygView( object ):
         if(config['load_ships']==True):
             self.loadShips()
 
-
     def loadShips(self):
         with open(config['ship_file'], 'rb') as f:
             lShipData = pickle.load(f)
@@ -121,7 +117,6 @@ class PygView( object ):
 
     def reset(self):
         self.ship = space_ship( self.screen, self.landing_points )
-        #self.sp = space_ship( self.screen, self.landing_points )
         self.game_over = False
 
     def run(self):
@@ -133,11 +128,6 @@ class PygView( object ):
         while running:
             da = 0
             thrust = 0.0
-            #initialize ship
-            #self.ship = self.ships[count]
-
-
-            
             for qqq in range(len(theLevels)):
                 levelfile1 = open( theLevels[qqq] )
                 level1 = json.load( levelfile1 )
@@ -158,7 +148,6 @@ class PygView( object ):
                 while all_crashed == False:
                     self.draw_text("Generation:{}".format(self.generation))
                     self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(qqq+1,len(theLevels),shipsAlive)))
-                    
 
                     # Render the planet
                     self.do_planet()
@@ -188,8 +177,7 @@ class PygView( object ):
                         if ai_key == "right":
                             da = config["delta_angle"]
                         thrust = config["thrust"]
-                        
-                        
+
                         if(j==0):
                             theColor = (255, 0, 0)
                         elif(j==1):
@@ -218,12 +206,12 @@ class PygView( object ):
                             stop=self.ships[j].crashed,
                             color = theColor )
                         # Did we land?
-                        if(self.ships[j].check_on_planet() or self.ships[j].check_pos_screen()==False):
+                        if self.ships[j].check_on_planet() or self.ships[j].check_pos_screen()==False:
                             self.ships[j].crashed = True
 
                         self.ships[j].updateFitness(self.level['center_white'])
 
-                        if ( self.ships[j].check_red_planets(self.planets) == False ):
+                        if self.ships[j].check_red_planets(self.planets) == False:
                             self.ships[j].crashed = True
                             # Give it a mean Penalty.
                             #self.ships[j].fitness = self.ships[j].fitness + 0.2
@@ -276,23 +264,23 @@ class PygView( object ):
         #The MLP Neural network for this ship
         NN = deepcopy(mlp)
 
-        #Store shape information for reconstruction
+        # Store shape information for reconstruction
         s0 = len(NN.intercepts_[0])
         s1 = len(NN.intercepts_[1])
         s2 = NN.coefs_[0].shape
         s3 = NN.coefs_[1].shape
 
-        #Combine all weights into one array
+        # Combine all weights into one array
         intercepts= np.concatenate( (NN.intercepts_[0],NN.intercepts_[1]))
         weights1 = NN.coefs_[0].flatten()
         weights2 = NN.coefs_[1].flatten()
         allWeights = np.concatenate((weights1,weights2))
 
-        #Mutate anywhere from 5% to %20
+        # Mutate anywhere from 5% to %20
         num_m_weights = int(np.round((np.random.rand()*0.15+0.05) * len(allWeights))) #int((np.random.rand()*0.10+0.05)*len(allWeights))
         num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05) * len(intercepts))) * int(np.round(np.random.rand()))#int(np.round(np.random.rand()));# int((np.random.rand()*0.10+0.05)*len(intercepts))
 
-        #Array of indices to mutate
+        # Array of indices to mutate
         m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
         m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
 
@@ -557,7 +545,7 @@ class PygView( object ):
 
 
 
-            pygame.draw.circle( self.screen,  colors.white, self.level["center_white"], self.level["radius_white"] )
+            pygame.draw.circle(self.screen, Colors.white, self.level["center_white"], self.level["radius_white"])
 
 
         radii = self.level['radii_red']
@@ -588,7 +576,7 @@ class PygView( object ):
             self.ships[i].donezo = False
 
 class space_ship:
-    """The space shipe class"""
+    """The space ship class"""
     def __init__(self, screen, landing_points, level  ):
         self.level = level
         self.pos = self.level['ship']['starting_pos']
@@ -943,7 +931,7 @@ class space_ship:
         self.back = (left + right)/2
         self.tip, self.left, self.right = tip, left, right
 
-    def physics( self, thrust=0.0, delta_angle=0.0, stop=False, color = colors.blue ):
+    def physics(self, thrust=0.0, delta_angle=0.0, stop=False, color = Colors.blue):
         ppos =  self.level['center_white']
 
         # gravity = config["gravity"]*(self.pos-ppos).normalize()
@@ -1056,7 +1044,7 @@ class red_planet:
         plist[:, 1] = self.center[1] + self.radius*np.sin(thetas)
 
         pygame.draw.polygon (self.screen, colors.red, plist+landform  )"""
-        pygame.draw.circle( self.screen, colors.red, np.int64(self.center), self.radius)
+        pygame.draw.circle(self.screen, Colors.red, np.int64(self.center), self.radius)
 
     def __getitem__( self, key ):
         if key == 0:
