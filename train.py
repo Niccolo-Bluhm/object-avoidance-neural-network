@@ -256,7 +256,7 @@ class PygView( object ):
 
         pygame.quit()
 
-    def mutate(self,mlp):
+    def mutate(self, mlp):
         """We are going to combine all the weights into one 1D array.
         After chaning the weights, we need to reshape them back into their original form."""
         #The MLP Neural network for this ship
