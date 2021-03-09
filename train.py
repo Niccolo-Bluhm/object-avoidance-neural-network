@@ -36,15 +36,15 @@ config = dict(
     speed_multiplier=1.35,
     time_limit=5,
     ship_file=None,
-    default_level='levels\Train\Train2.txt',
+    default_level='training_levels\Train2.txt',
     normalize_fitness=False
 )
 
-TrainingLevels = ['levels\Train\Train1.txt','levels\Train\Train2.txt','levels\Train\Train6.txt','levels\Train\Train4.txt','levels\Train\Train5.txt']
+TrainingLevels = ['training_levels\Train1.txt','training_levels\Train2.txt','training_levels\Train6.txt','training_levels\Train4.txt','training_levels\Train5.txt']
 
 TestingLevels = ['levels\Train\Train3.txt','levels\Train\Train3.txt','levels\Train\Train1.txt','levels\Train\Train2.txt','levels\Train\Train4.txt']
 
-TestingLevels = ['levels\Test\Test3.txt']
+TestingLevels = ['testing_levels\Test3.txt']
 
 theLevels = TrainingLevels
 
