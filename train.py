@@ -16,23 +16,9 @@ from lib.genetic_algorithm import mutate, crossover
 from lib.game_utilities import Colors
 VEC = pygame.math.Vector2
 
-
-game_settings = dict(
-    gravity=0,
-    land_angle=10,
-    land_speed=0.25,
-    delta_angle=2,
-    thrust=0.01,
-    dt=5,
-    num_ships=10,
-    starting_pos=(20, 20),
-    starting_angle=45,
-    speed_multiplier=1.35,
-    time_limit=5,
-    ship_file=None,
-    default_level='training_levels\Train2.txt',
-    normalize_fitness=False
-)
+# Load the game settings.
+with open('game_settings.json') as json_file:
+    game_settings = json.load(json_file)
 
 TrainingLevels = ['training_levels\Train1.txt','training_levels\Train2.txt','training_levels\Train6.txt','training_levels\Train4.txt','training_levels\Train5.txt']
 
@@ -354,7 +340,7 @@ class PygView( object ):
             #Select two parents
             parents = np.random.choice(range(game_settings['num_ships']), size = 2, replace = False, p=probabilities)
 
-            NN = self.crossover(sortedShips[parents[0]],sortedShips[parents[1]])
+            NN = crossover(sortedShips[parents[0]],sortedShips[parents[1]])
             theNewMlp = mutate(NN)
             #theNewMlp = self.mutate(sortedShips[parents[0]])
 
