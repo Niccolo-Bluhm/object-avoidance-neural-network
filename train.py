@@ -12,12 +12,12 @@ import json
 import sys  
 import pathlib
 import builtins
-from lib.genetic_algorithm import mutate
+from lib.genetic_algorithm import mutate, crossover
 from lib.game_utilities import Colors
 VEC = pygame.math.Vector2
 
 
-config = dict(
+game_settings = dict(
     gravity=0,
     land_angle=10,
     land_speed=0.25,
@@ -80,7 +80,7 @@ class PygView( object ):
         self.landing_points = None
         self.ship = space_ship( self.screen, self.landing_points, self.level )
         self.ships = []
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             self.ships.append(space_ship(self.screen, self.landing_points, self.level))
         self.Newships = []
         self.game_over = False
@@ -90,18 +90,18 @@ class PygView( object ):
         self.prevShips = []
         self.prevFitness = []
         self.logLst = []
-        self.nfitnesses = np.zeros(config['num_ships'])
+        self.nfitnesses = np.zeros(game_settings['num_ships'])
 
         self.maxes = np.zeros(len(theLevels))
 
-        if config['ship_file'] is not None:
+        if game_settings['ship_file'] is not None:
             self.loadShips()
 
     def loadShips(self):
-        with open(config['ship_file'], 'rb') as f:
+        with open(game_settings['ship_file'], 'rb') as f:
             lShipData = pickle.load(f)
 
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             self.ships[i].mlp.intercepts_[0] = lShipData[-1]['intercepts1']
             self.ships[i].mlp.intercepts_[1] = lShipData[-1]['intercepts2']
             self.ships[i].mlp.coefs_[0] = lShipData[-1]['weights1']
@@ -125,7 +125,7 @@ class PygView( object ):
                 level1 = json.load( levelfile1 )
                 self.level = deepcopy(level1)
                 
-                for j in range(config['num_ships']):
+                for j in range(game_settings['num_ships']):
                     self.ships[j].level = deepcopy(self.level)
                     self.ships[j].physics(
                             delta_angle=da,
@@ -144,8 +144,8 @@ class PygView( object ):
                     # Render the planet
                     self.do_planet()
 
-                    for j in range(config['num_ships']):
-                        if(time.time()-start_time > config['time_limit']):
+                    for j in range(game_settings['num_ships']):
+                        if(time.time()-start_time > game_settings['time_limit']):
                             self.ships[j].crashed = True
                         for event in pygame.event.get():
                             if event.type == pygame.QUIT:
@@ -165,10 +165,10 @@ class PygView( object ):
                         thrust = 0.0
                         ai_key = self.ships[j].predict(self.planets)
                         if ai_key == "left":
-                            da = -config["delta_angle"]
+                            da = -game_settings["delta_angle"]
                         if ai_key == "right":
-                            da = config["delta_angle"]
-                        thrust = config["thrust"]
+                            da = game_settings["delta_angle"]
+                        thrust = game_settings["thrust"]
 
                         if(j==0):
                             theColor = (255, 0, 0)
@@ -218,7 +218,7 @@ class PygView( object ):
 
                     shipsAlive = 0
                     all_crashed = True
-                    for j in range(config['num_ships']):
+                    for j in range(game_settings['num_ships']):
                         if(self.ships[j].crashed == False):
                             all_crashed = False
                             shipsAlive = shipsAlive + 1 
@@ -227,7 +227,7 @@ class PygView( object ):
 
                 #Normalize fitness by the number of loops 
                 fitnesses = []
-                for p in range(config['num_ships']):
+                for p in range(game_settings['num_ships']):
                     fitnesses.append(deepcopy(self.ships[p].fitness2))
                 theMax = max(fitnesses)
 
@@ -237,7 +237,7 @@ class PygView( object ):
                     theMax = self.maxes[qqq] 
 
 
-                if(config['normalize_fitness'] == True):
+                if(game_settings['normalize_fitness'] == True):
                     fitnesses = np.array(fitnesses) / loopCount
                 
                 self.nfitnesses = self.nfitnesses + np.array(fitnesses)
@@ -247,65 +247,13 @@ class PygView( object ):
 
         pygame.quit()
 
-    def crossover(self,mlp1,mlp2):
-        """We are going to combine all the weights into one 1D array.
-        After chaning the weights, we need to reshape them back into their original form."""
-        #The MLP Neural network for this ship
-        NN = deepcopy(mlp1)
-        NN2 = deepcopy(mlp2)
 
-        #Store shape information for reconstruction
-        s0 = len(NN.intercepts_[0])
-        s1 = len(NN.intercepts_[1])
-        s2 = NN.coefs_[0].shape
-        s3 = NN.coefs_[1].shape
-
-        intercepts= np.concatenate( (NN.intercepts_[0],NN.intercepts_[1]))
-        weights1 = NN.coefs_[0].flatten()
-        weights2 = NN.coefs_[1].flatten()
-        allWeights = np.concatenate((weights1,weights2))
-
-        intercepts2= np.concatenate( (NN2.intercepts_[0],NN2.intercepts_[1]))
-        weights12 = NN2.coefs_[0].flatten()
-        weights22 = NN2.coefs_[1].flatten()
-        allWeights2 = np.concatenate((weights12,weights22))
-
-        #Crossover anywhere from 20% to %60
-        #Number of weights and intercepts to crossover
-        #num_m_weights = 3 #int( np.ceil( (np.random.rand()*0.1)*len(allWeights)) )
-        #num_m_intercepts = int(np.round(np.random.rand())); #np.round((np.random.rand()*0.1)*len(intercepts))
-        num_m_weights = int(np.round((np.random.rand()*0.15+0.05)  * len(allWeights))) #int((np.random.rand()*0.10+0.05)*len(allWeights))
-        num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05)  * len(intercepts))) * int(np.round(np.random.rand()+0.3))
-
-        m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
-        m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
-
-        for ii in range(len(m_inds_w)):
-            allWeights[m_inds_w[ii]] = allWeights2[m_inds_w[ii]]
-
-        if(num_m_intercepts !=0):
-            for ii in range(len(m_inds_i)):
-                intercepts[m_inds_i[ii]] = intercepts2[m_inds_i[ii]]
-
-        #Reconstruct
-        intercepts_0 = intercepts[range(s0)]
-        intercepts_1 = intercepts[range(s0,s1+s0)]
-        coefs_0 = allWeights[range(len(weights1))].reshape(s2)
-        coefs_1 = allWeights[range(len(weights1),len(weights2)+len(weights1))].reshape(s3)
-
-        #Add the new weights back into the neural network
-        NN.intercepts_[0] = intercepts_0
-        NN.intercepts_[1] = intercepts_1
-        NN.coefs_[0] = coefs_0
-        NN.coefs_[1] = coefs_1
-
-        return deepcopy(NN)
 
     def updateWeights(self):
         newShips = []
 
-        scores = np.zeros(config['num_ships'])
-        for i in range(config['num_ships']):
+        scores = np.zeros(game_settings['num_ships'])
+        for i in range(game_settings['num_ships']):
             scores[i] = deepcopy(self.nfitnesses[i]) #deepcopy(self.ships[i].fitness2)
 
         scores_sort = np.sort(scores)[::-1]
@@ -321,7 +269,7 @@ class PygView( object ):
         ##### PRINT STUFF #####
         print("")
         print("Generation: " , self.generation)
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             print("Ship Score:",scores[scores_sort_ind[i]],self.ships[scores_sort_ind[i]].fitnessDebug, "Weight:")
 
         #If we did worse than before, reject this generation
@@ -329,8 +277,8 @@ class PygView( object ):
         
         reject = False
         if reject:
-            scores = np.zeros(config['num_ships'])
-            for i in range(config['num_ships']):
+            scores = np.zeros(game_settings['num_ships'])
+            for i in range(game_settings['num_ships']):
                 scores[i] = deepcopy(self.prevFitness[i])
                 self.ships[i].mlp = deepcopy(self.prevShips[i])
 
@@ -344,7 +292,7 @@ class PygView( object ):
             
         
         self.generation = self.generation + 1
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             #Get Weight value of best ship
             NN1= deepcopy(self.ships[scores_sort_ind[i]].mlp)
             intercepts= np.concatenate( (NN1.intercepts_[0],NN1.intercepts_[1]))
@@ -382,7 +330,7 @@ class PygView( object ):
         # Low values indicate a better score (Closer to landing zone)
         scores_sort_ind = scores.argsort()[::-1]
         sortedShips = []
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             sortedShips.append( deepcopy(self.ships[scores_sort_ind[i]].mlp))
 
        #Normalize the fitness scores
@@ -391,20 +339,20 @@ class PygView( object ):
         probabilities = scores_sort
 
         #Take best performing ships(Top 20%) and introduce directly to next round
-        num_bestShips = int(np.floor(config['num_ships']*0.2))
+        num_bestShips = int(np.floor(game_settings['num_ships'] * 0.2))
         for i in range(num_bestShips):
             newShips.append(deepcopy(self.ships[scores_sort_ind[i]].mlp))
 
         #Take two parents, mutate them, and introduce to next round (Skip crossover)
         for i in range(2):
-            parents1 = np.random.choice(range(config['num_ships']),size = 2, replace = False,p=probabilities)
+            parents1 = np.random.choice(range(game_settings['num_ships']), size = 2, replace = False, p=probabilities)
             theNewMlp1 = mutate(sortedShips[parents1[0]])
             newShips.append(deepcopy(theNewMlp1))
 
         #Whatever ships we have left mutate + crossbreed
-        for i in range(int(config['num_ships'] - len(newShips))):
+        for i in range(int(game_settings['num_ships'] - len(newShips))):
             #Select two parents
-            parents = np.random.choice(range(config['num_ships']),size = 2, replace = False,p=probabilities)
+            parents = np.random.choice(range(game_settings['num_ships']), size = 2, replace = False, p=probabilities)
 
             NN = self.crossover(sortedShips[parents[0]],sortedShips[parents[1]])
             theNewMlp = mutate(NN)
@@ -429,7 +377,7 @@ class PygView( object ):
             self.ships[i].mlp = deepcopy(newShips[i])
             self.ships[i].fitnessDebug = 0
 
-        self.nfitnesses = np.zeros(config['num_ships'])
+        self.nfitnesses = np.zeros(game_settings['num_ships'])
 
 
     def draw_text( self, text ):
@@ -492,7 +440,7 @@ class PygView( object ):
     def resetShipLocs(self):
         """Reset the ship locations, but not their neural net weights"""
 
-        for i in range(config['num_ships']):
+        for i in range(game_settings['num_ships']):
             self.ships[i].pos = self.level['ship']['starting_pos']
             self.ships[i].angle = self.level["ship"]['starting_angle']
             self.ships[i].velocity = VEC(0, 0)
@@ -861,11 +809,11 @@ class space_ship:
         ppos =  self.level['center_white']
 
         # gravity = config["gravity"]*(self.pos-ppos).normalize()
-        dt = config["dt"]
+        dt = game_settings["dt"]
         if not stop:
             thrust_vector = VEC(1, 0).rotate(self.angle)*thrust
             # self.velocity = self.velocity + (gravity+thrust_vector)*dt
-            self.velocity = config['speed_multiplier']*VEC(1, 0).rotate(self.angle)
+            self.velocity = game_settings['speed_multiplier'] * VEC(1, 0).rotate(self.angle)
 
             self.pos = self.pos + self.velocity*dt
             self.angle += delta_angle
@@ -882,10 +830,10 @@ class space_ship:
 # Begin methods to check win conditions
     def check_orientation(self):
         pangle = ((self.left - self.right).angle_to(
-            self.pos-config["planet_center"]))
+            self.pos - game_settings["planet_center"]))
 
-        if pangle > -90-config["land_angle"] \
-                and pangle < -90+config["land_angle"]:
+        if pangle > -90-game_settings["land_angle"] \
+                and pangle < -90+game_settings["land_angle"]:
 
             return True
         else:
@@ -901,7 +849,7 @@ class space_ship:
 
 
     def check_speed(self):
-        if self.velocity.length() < config["land_speed"]:
+        if self.velocity.length() < game_settings["land_speed"]:
             return True
         else:
             return False
@@ -928,7 +876,7 @@ class space_ship:
         land_coors = self.landing_points[0]
         
         ship_angle = self.angle%360
-        dSurface = (ship_coors - config["planet_center"]).length() - config["planet_radius"]        
+        dSurface = (ship_coors - game_settings["planet_center"]).length() - game_settings["planet_radius"]
         dLandStrip = (ship_coors - land_coors).length()
         
         #Normalize inputs, want -1 to 1 range
@@ -1003,7 +951,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         levelfile = open( sys.argv[1] )
     else:
-        levelfile = open( config['default_level'] )
+        levelfile = open(game_settings['default_level'])
 
     level = json.load( levelfile )
     # call with width of window and fps
