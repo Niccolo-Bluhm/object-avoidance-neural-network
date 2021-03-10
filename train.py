@@ -12,15 +12,9 @@ import json
 import sys  
 import pathlib
 import builtins
+from lib.genetic_algorithm import mutate
+from lib.game_utilities import Colors
 VEC = pygame.math.Vector2
-
-
-class Colors:
-    white = (255,) * 3
-    red = (255, 0, 0)
-    green = (0, 128, 0)
-    blue = (0, 142, 204)
-    black = (0, 0, 0)
 
 
 config = dict(
@@ -59,7 +53,7 @@ n_output = 1
 
 #These are used for initializing the scikitlearn Neural Networks
 X = np.zeros(n_inputs)
-X_train = np.array([X,X])
+X_train = np.array([X, X])
 y_train = np.array(range(n_output + 1))
 
 
@@ -250,74 +244,8 @@ class PygView( object ):
 
 
             self.updateWeights()
-                #for mm in range(config['num_ships']):
-                #    self.ships[mm].level = deepcopy(self.level)
-                #self.resetShipLocs()
 
         pygame.quit()
-
-    def mutate(self, mlp):
-        """We are going to combine all the weights into one 1D array.
-        After chaning the weights, we need to reshape them back into their original form."""
-        #The MLP Neural network for this ship
-        NN = deepcopy(mlp)
-
-        # Store shape information for reconstruction
-        s0 = len(NN.intercepts_[0])
-        s1 = len(NN.intercepts_[1])
-        s2 = NN.coefs_[0].shape
-        s3 = NN.coefs_[1].shape
-
-        # Combine all weights into one array
-        intercepts= np.concatenate( (NN.intercepts_[0],NN.intercepts_[1]))
-        weights1 = NN.coefs_[0].flatten()
-        weights2 = NN.coefs_[1].flatten()
-        allWeights = np.concatenate((weights1,weights2))
-
-        # Mutate anywhere from 5% to %20
-        num_m_weights = int(np.round((np.random.rand()*0.15+0.05) * len(allWeights))) #int((np.random.rand()*0.10+0.05)*len(allWeights))
-        num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05) * len(intercepts))) * int(np.round(np.random.rand()))#int(np.round(np.random.rand()));# int((np.random.rand()*0.10+0.05)*len(intercepts))
-
-        # Array of indices to mutate
-        m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
-        m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
-
-
-        selector = np.random.rand()
-        if(selector > 0.5):
-
-            mutateFactor = 1 + ((np.random.rand() - 0.5) * 3 + (np.random.rand() - 0.5))
-            for ii in range(len(m_inds_w)):
-                allWeights[m_inds_w[ii]] = allWeights[m_inds_w[ii]] * mutateFactor
-
-            mutateFactor = 1 + ((np.random.rand() - 0.5) * 3 + (np.random.rand() - 0.5))
-            if(num_m_intercepts!=0):
-                for ii in range(len(m_inds_i)):
-                    intercepts[m_inds_i[ii]] = allWeights[m_inds_w[ii]] * mutateFactor
-        else:
-
-            for ii in range(len(m_inds_w)):
-                allWeights[m_inds_w[ii]] = np.random.rand()*2-1
-
-            if(num_m_intercepts!=0):
-                for ii in range(len(m_inds_i)):
-                    intercepts[m_inds_i[ii]] = np.random.rand()*2-1
-
-
-
-        #Reconstruct
-        intercepts_0 = intercepts[range(s0)]
-        intercepts_1 = intercepts[range(s0,s1+s0)]
-        coefs_0 = allWeights[range(len(weights1))].reshape(s2)
-        coefs_1 = allWeights[range(len(weights1),len(weights2)+len(weights1))].reshape(s3)
-
-        #Add the new weights back into the neural network
-        NN.intercepts_[0] = intercepts_0
-        NN.intercepts_[1] = intercepts_1
-        NN.coefs_[0] = coefs_0
-        NN.coefs_[1] = coefs_1
-
-        return deepcopy(NN)
 
     def crossover(self,mlp1,mlp2):
         """We are going to combine all the weights into one 1D array.
@@ -470,7 +398,7 @@ class PygView( object ):
         #Take two parents, mutate them, and introduce to next round (Skip crossover)
         for i in range(2):
             parents1 = np.random.choice(range(config['num_ships']),size = 2, replace = False,p=probabilities)
-            theNewMlp1 = self.mutate(sortedShips[parents1[0]])
+            theNewMlp1 = mutate(sortedShips[parents1[0]])
             newShips.append(deepcopy(theNewMlp1))
 
         #Whatever ships we have left mutate + crossbreed
@@ -479,7 +407,7 @@ class PygView( object ):
             parents = np.random.choice(range(config['num_ships']),size = 2, replace = False,p=probabilities)
 
             NN = self.crossover(sortedShips[parents[0]],sortedShips[parents[1]])
-            theNewMlp = self.mutate(NN)
+            theNewMlp = mutate(NN)
             #theNewMlp = self.mutate(sortedShips[parents[0]])
 
             newShips.append(deepcopy(theNewMlp))
