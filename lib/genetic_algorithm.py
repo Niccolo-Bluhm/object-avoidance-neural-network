@@ -37,7 +37,7 @@ def mutate(mlp):
 
 def crossover(mlp1, mlp2):
     """We are going to combine all the weights into one 1D array.
-    After chaning the weights, we need to reshape them back into their original form."""
+    After changing the weights, we need to reshape them back into their original form."""
 
     mlp1 = deepcopy(mlp1)
     weights1, biases1 = deconstruct_mlp(mlp1)
@@ -63,7 +63,7 @@ def crossover(mlp1, mlp2):
 
 
 def deconstruct_mlp(mlp):
-    """ Takes all biases and combines into one array. Takes all weights and combines into one array.
+    """ Takes all biases and combines into a 1D array. Takes all weights and combines into a 1D array.
     :param mlp: sci-kit learn mlp
     :return: (weights, biases)
     """
