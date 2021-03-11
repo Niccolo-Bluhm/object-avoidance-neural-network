@@ -20,19 +20,14 @@ def mutate(mlp):
 
     selector = np.random.rand()
     if selector > 0.5:
-        mutate_factor = 1 + ((np.random.rand() - 0.5) * 3 + (np.random.rand() - 0.5))
-        for idx in weight_indices:
-            all_weights[idx] = all_weights[idx] * mutate_factor
-
-        mutate_factor = 1 + ((np.random.rand() - 0.5) * 3 + (np.random.rand() - 0.5))
-        for idx in bias_indices:
-            all_biases[idx] = all_weights[idx] * mutate_factor
+        # Scale the weights and biases by a random number between -1 and 3
+        mutate_factor = np.random.uniform(-1, 3)
+        all_weights[weight_indices] *= mutate_factor
+        all_biases[bias_indices] *= mutate_factor
     else:
-        for idx in weight_indices:
-            all_weights[idx] = np.random.rand() * 2 - 1
-
-        for idx in bias_indices:
-            all_biases[idx] = np.random.rand() * 2 - 1
+        # Replace selected weights and biases with random number between -1 and 1
+        all_weights[weight_indices] = np.random.rand(len(weight_indices)) * 2 - 1
+        all_biases[bias_indices] = np.random.rand(len(bias_indices)) * 2 - 1
 
     # Reconstruct
     mlp = construct_mlp(mlp, all_weights, all_biases)
@@ -43,51 +38,26 @@ def mutate(mlp):
 def crossover(mlp1, mlp2):
     """We are going to combine all the weights into one 1D array.
     After chaning the weights, we need to reshape them back into their original form."""
-    # The MLP Neural network for this ship.
+
     mlp1 = deepcopy(mlp1)
+    weights1, biases1 = deconstruct_mlp(mlp1)
+
     mlp2 = deepcopy(mlp2)
+    weights2, biases2 = deconstruct_mlp(mlp2)
 
-    # Store shape information for reconstruction.
-    s0 = len(mlp1.intercepts_[0])
-    s1 = len(mlp1.intercepts_[1])
-    s2 = mlp1.coefs_[0].shape
-    s3 = mlp1.coefs_[1].shape
+    # The number of biases to crossover, anywhere from 5 to 25%.
+    num_biases = int( np.round(len(biases1) * np.random.uniform(0.05, 0.25)) )
+    num_weights = int( np.round(len(weights1) * np.random.uniform(0.05, 0.25)) )
 
-    intercepts = np.concatenate( (mlp1.intercepts_[0], mlp1.intercepts_[1]))
-    weights1 = mlp1.coefs_[0].flatten()
-    weights2 = mlp1.coefs_[1].flatten()
-    allWeights = np.concatenate((weights1, weights2))
+    weight_indices = np.random.choice(range(0, len(weights1)), size=num_weights, replace=False)
+    bias_indices = np.random.choice(range(0, len(biases1)), size=num_biases, replace=False)
 
-    intercepts2= np.concatenate( (mlp2.intercepts_[0], mlp2.intercepts_[1]))
-    weights12 = mlp2.coefs_[0].flatten()
-    weights22 = mlp2.coefs_[1].flatten()
-    allWeights2 = np.concatenate((weights12, weights22))
+    # Perform crossover.
+    weights1[weight_indices] = weights2[weight_indices]
+    biases1[bias_indices] = biases2[bias_indices]
 
-    # Crossover anywhere from 20% to 60%.
-    num_m_intercepts = int(np.round((np.random.rand()*0.15+0.05)  * len(intercepts))) * int(np.round(np.random.rand()+0.3))
-    num_m_weights = int(np.round((np.random.rand() * 0.15 + 0.05) * len(allWeights)))
-
-    m_inds_w = np.random.choice(range(0,len(allWeights)), size = num_m_weights, replace = False)
-    m_inds_i = np.random.choice(range(0,len(intercepts)), size = num_m_intercepts, replace = False)
-
-    for ii in range(len(m_inds_w)):
-        allWeights[m_inds_w[ii]] = allWeights2[m_inds_w[ii]]
-
-    if(num_m_intercepts !=0):
-        for ii in range(len(m_inds_i)):
-            intercepts[m_inds_i[ii]] = intercepts2[m_inds_i[ii]]
-
-    #Reconstruct
-    intercepts_0 = intercepts[range(s0)]
-    intercepts_1 = intercepts[range(s0,s1+s0)]
-    coefs_0 = allWeights[range(len(weights1))].reshape(s2)
-    coefs_1 = allWeights[range(len(weights1),len(weights2)+len(weights1))].reshape(s3)
-
-    #Add the new weights back into the neural network
-    mlp1.intercepts_[0] = intercepts_0
-    mlp1.intercepts_[1] = intercepts_1
-    mlp1.coefs_[0] = coefs_0
-    mlp1.coefs_[1] = coefs_1
+    # Reconstruct
+    mlp1 = construct_mlp(mlp1, weights1, biases1)
 
     return mlp1
 
