@@ -12,7 +12,8 @@ import sys
 import pathlib
 import builtins
 from lib.genetic_algorithm import mutate, crossover, deconstruct_mlp, construct_mlp
-from lib.game_utilities import Colors
+from lib.spaceship import SpaceShip
+from lib.colors import Colors
 vector = pygame.math.Vector2
 
 
@@ -23,7 +24,7 @@ class PygView(object):
 
         # Load the game settings.
         with open(settings_file) as json_file:
-            game_settings = json.load(json_file)
+            self.game_settings = json.load(json_file)
 
         # Load the levels
         level_files = os.listdir(level_dir)
@@ -35,20 +36,20 @@ class PygView(object):
         pygame.init()
         pygame.display.set_caption("Press ESC to quit")
 
-        self.level = levels[0]
-        self.width = game_settings['width']
-        self.height = game_settings['height']
-        self.fps = game_settings['fps']
+        self.level = self.levels[0]
+        self.width = self.game_settings['width']
+        self.height = self.game_settings['height']
+        self.fps = self.game_settings['fps']
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont('mono', 20, bold=True)
         self.planetFinished = False
         self.planets = []
-        self.ship = SpaceShip(self.screen, self.level)
+        self.ship = SpaceShip(self.screen, self.level, self.game_settings)
         self.ships = []
-        for i in range(game_settings['num_ships']):
-            self.ships.append(SpaceShip(self.screen, self.level))
+        for i in range(self.game_settings['num_ships']):
+            self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
         self.Newships = []
         self.game_over = False
         self.stop_printing = False
@@ -57,25 +58,25 @@ class PygView(object):
         self.prevShips = []
         self.prevFitness = []
         self.logLst = []
-        self.nfitnesses = np.zeros(game_settings['num_ships'])
+        self.nfitnesses = np.zeros(self.game_settings['num_ships'])
 
         self.maxes = np.zeros(len(self.levels))
 
-        if game_settings['ship_file'] is not None:
+        if self.game_settings['ship_file'] is not None:
             self.loadShips()
 
     def loadShips(self):
-        with open(game_settings['ship_file'], 'rb') as f:
+        with open(self.game_settings['ship_file'], 'rb') as f:
             lShipData = pickle.load(f)
 
-        for i in range(game_settings['num_ships']):
+        for i in range(self.game_settings['num_ships']):
             self.ships[i].mlp.intercepts_[0] = lShipData[-1]['intercepts1']
             self.ships[i].mlp.intercepts_[1] = lShipData[-1]['intercepts2']
             self.ships[i].mlp.coefs_[0] = lShipData[-1]['weights1']
             self.ships[i].mlp.coefs_[1] = lShipData[-1]['weights2']
 
     def reset(self):
-        self.ship = SpaceShip(self.screen, self.level)
+        self.ship = SpaceShip(self.screen, self.level, self.game_settings)
         self.game_over = False
 
     def run(self):
@@ -87,13 +88,9 @@ class PygView(object):
         while running:
             da = 0
             thrust = 0.0
-            for idx, level in theLevels:
-                levelfile1 = open(theLevels[idx])
-                level1 = json.load(levelfile1)
-                self.level = deepcopy(level1)
-
-                for j in range(game_settings['num_ships']):
-                    self.ships[j].level = deepcopy(self.level)
+            for idx, level in enumerate(self.levels):
+                for j in range(self.game_settings['num_ships']):
+                    self.ships[j].level = level
                     self.ships[j].physics(
                         delta_angle=da,
                         thrust=thrust,
@@ -104,15 +101,15 @@ class PygView(object):
                 all_crashed = False
                 shipsAlive = 10
                 loopCount = 0
-                while all_crashed == False:
+                while not all_crashed:
                     self.draw_text("Generation:{}".format(self.generation))
-                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx + 1, len(theLevels), shipsAlive)))
+                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx + 1, len(self.levels), shipsAlive)))
 
                     # Render the planet
                     self.do_planet()
 
-                    for j in range(game_settings['num_ships']):
-                        if (time.time() - start_time > game_settings['time_limit']):
+                    for j in range(self.game_settings['num_ships']):
+                        if (time.time() - start_time > self.game_settings['time_limit']):
                             self.ships[j].crashed = True
                         for event in pygame.event.get():
                             if event.type == pygame.QUIT:
@@ -132,10 +129,10 @@ class PygView(object):
                         thrust = 0.0
                         ai_key = self.ships[j].predict(self.planets)
                         if ai_key == "left":
-                            da = -game_settings["delta_angle"]
+                            da = -self.game_settings["delta_angle"]
                         if ai_key == "right":
-                            da = game_settings["delta_angle"]
-                        thrust = game_settings["thrust"]
+                            da = self.game_settings["delta_angle"]
+                        thrust = self.game_settings["thrust"]
 
                         if (j == 0):
                             theColor = (255, 0, 0)
@@ -168,7 +165,7 @@ class PygView(object):
                         if self.ships[j].check_on_planet() or self.ships[j].check_pos_screen() == False:
                             self.ships[j].crashed = True
 
-                        self.ships[j].updateFitness(self.level['center_white'])
+                        self.ships[j].updateFitness()
 
                         if self.ships[j].check_red_planets(self.planets) == False:
                             self.ships[j].crashed = True
@@ -184,7 +181,7 @@ class PygView(object):
 
                     shipsAlive = 0
                     all_crashed = True
-                    for j in range(game_settings['num_ships']):
+                    for j in range(self.game_settings['num_ships']):
                         if (self.ships[j].crashed == False):
                             all_crashed = False
                             shipsAlive = shipsAlive + 1
@@ -193,7 +190,7 @@ class PygView(object):
 
                 # Normalize fitness by the number of loops
                 fitnesses = []
-                for p in range(game_settings['num_ships']):
+                for p in range(self.game_settings['num_ships']):
                     fitnesses.append(deepcopy(self.ships[p].fitness2))
                 theMax = max(fitnesses)
 
@@ -202,7 +199,7 @@ class PygView(object):
                 else:
                     theMax = self.maxes[idx]
 
-                if (game_settings['normalize_fitness'] == True):
+                if (self.game_settings['normalize_fitness'] == True):
                     fitnesses = np.array(fitnesses) / loopCount
 
                 self.nfitnesses = self.nfitnesses + np.array(fitnesses)
@@ -214,8 +211,8 @@ class PygView(object):
     def updateWeights(self):
         newShips = []
 
-        scores = np.zeros(game_settings['num_ships'])
-        for i in range(game_settings['num_ships']):
+        scores = np.zeros(self.game_settings['num_ships'])
+        for i in range(self.game_settings['num_ships']):
             scores[i] = deepcopy(self.nfitnesses[i])  # deepcopy(self.ships[i].fitness2)
 
         scores_sort = np.sort(scores)[::-1]
@@ -231,15 +228,15 @@ class PygView(object):
         ##### PRINT STUFF #####
         print("")
         print("Generation: ", self.generation)
-        for i in range(game_settings['num_ships']):
+        for i in range(self.game_settings['num_ships']):
             print("Ship Score:", scores[scores_sort_ind[i]], self.ships[scores_sort_ind[i]].fitnessDebug, "Weight:")
 
         # If we did worse than before, reject this generation
 
         reject = False
         if reject:
-            scores = np.zeros(game_settings['num_ships'])
-            for i in range(game_settings['num_ships']):
+            scores = np.zeros(self.game_settings['num_ships'])
+            for i in range(self.game_settings['num_ships']):
                 scores[i] = deepcopy(self.prevFitness[i])
                 self.ships[i].mlp = deepcopy(self.prevShips[i])
 
@@ -251,7 +248,7 @@ class PygView(object):
             print("Generation Rejected")
 
         self.generation = self.generation + 1
-        for i in range(game_settings['num_ships']):
+        for i in range(self.game_settings['num_ships']):
             # Get Weight value of best ship
             NN1 = deepcopy(self.ships[scores_sort_ind[i]].mlp)
             intercepts = np.concatenate((NN1.intercepts_[0], NN1.intercepts_[1]))
@@ -286,7 +283,7 @@ class PygView(object):
         # Low values indicate a better score (Closer to landing zone)
         scores_sort_ind = scores.argsort()[::-1]
         sortedShips = []
-        for i in range(game_settings['num_ships']):
+        for i in range(self.game_settings['num_ships']):
             sortedShips.append(deepcopy(self.ships[scores_sort_ind[i]].mlp))
 
         # Normalize the fitness scores
@@ -295,20 +292,20 @@ class PygView(object):
         probabilities = scores_sort
 
         # Take best performing ships(Top 20%) and introduce directly to next round
-        num_bestShips = int(np.floor(game_settings['num_ships'] * 0.2))
+        num_bestShips = int(np.floor(self.game_settings['num_ships'] * 0.2))
         for i in range(num_bestShips):
             newShips.append(deepcopy(self.ships[scores_sort_ind[i]].mlp))
 
         # Take two parents, mutate them, and introduce to next round (Skip crossover)
         for i in range(2):
-            parents1 = np.random.choice(range(game_settings['num_ships']), size=2, replace=False, p=probabilities)
+            parents1 = np.random.choice(range(self.game_settings['num_ships']), size=2, replace=False, p=probabilities)
             theNewMlp1 = mutate(sortedShips[parents1[0]])
             newShips.append(deepcopy(theNewMlp1))
 
         # Whatever ships we have left mutate + crossbreed
-        for i in range(int(game_settings['num_ships'] - len(newShips))):
+        for i in range(int(self.game_settings['num_ships'] - len(newShips))):
             # Select two parents
-            parents = np.random.choice(range(game_settings['num_ships']), size=2, replace=False, p=probabilities)
+            parents = np.random.choice(range(self.game_settings['num_ships']), size=2, replace=False, p=probabilities)
 
             NN = crossover(sortedShips[parents[0]], sortedShips[parents[1]])
             theNewMlp = mutate(NN)
@@ -330,7 +327,7 @@ class PygView(object):
             self.ships[i].mlp = deepcopy(newShips[i])
             self.ships[i].fitnessDebug = 0
 
-        self.nfitnesses = np.zeros(game_settings['num_ships'])
+        self.nfitnesses = np.zeros(self.game_settings['num_ships'])
 
     def draw_text(self, text):
         """
@@ -385,7 +382,7 @@ class PygView(object):
     def resetShipLocs(self):
         """Reset the ship locations, but not their neural net weights"""
 
-        for i in range(game_settings['num_ships']):
+        for i in range(self.game_settings['num_ships']):
             self.ships[i].pos = self.level['ship']['starting_pos']
             self.ships[i].angle = self.level["ship"]['starting_angle']
             self.ships[i].velocity = vector(0, 0)
@@ -393,408 +390,6 @@ class PygView(object):
             self.ships[i].fitness2 = 0
             self.ships[i].sawTheGoodPlanet = False
             self.ships[i].donezo = False
-
-
-class SpaceShip:
-    """The space ship class"""
-    def __init__(self, screen, level, game_settings):
-        self.game_settings = game_settings
-
-        # Neural Network Structure. Hidden layer size is loaded from the game_settings file.
-        n_inputs = 10
-        n_hidden = self.game_settings['hidden_layer_sizes']
-        n_output = 1
-
-        # These are used for initializing the scikitlearn Neural Networks.
-        X = np.zeros(n_inputs)
-        X_train = np.array([X, X])
-        y_train = np.array(range(n_output + 1))
-        self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="tanh")
-        self.mlp.fit(X_train, y_train)
-
-        # Initialize the MLP with random weights and biases between -1 and 1
-        weights, biases = deconstruct_mlp(self.mlp)
-        weights = np.random.rand(len(weights)) * 2 - 1
-        biases = np.random.rand(len(biases)) * 2 - 1
-        self.mlp = construct_mlp(self.mlp, weights, biases)
-
-        self.level = level
-        self.pos = self.level['ship']['starting_pos']
-        self.angle = self.level['ship']['starting_angle']
-        self.screen = screen
-        self.velocity = vector(0, 0)
-        self.crashed = False
-        self.fitness = 0
-        self.inputs = np.zeros(n_inputs)
-        self.fitness2 = 0
-        self.fitnessDebug = 0
-        self.sawTheGoodPlanet = False
-        self.donezo = False
-        self.debug = False
-        self.max_distance = vector(self.game_settings['width'], self.game_settings['height']).length()
-
-    def validShipPos(self):
-        # Ensure the entire ship is within the window. Check all points on the triangle.
-        # All x coordinates.
-        ship_x_vals = np.array([self.tip[0], self.left[0], self.right[0]])
-        # All y coordinates.
-        ship_y_vals = np.array([self.tip[1], self.left[1], self.right[1]])
-
-        #TODO: Verify width corresponds to x and height to y
-        if np.any(ship_x_vals < 0) or np.any(ship_x_vals > self.game_settings['width']):
-            return False
-        if np.any(ship_y_vals < 0) or np.any(ship_x_vals > self.game_settings['height']):
-            return False
-
-        return True
-
-    def updateFitness(self):
-        """ Update the ships fitness value.
-
-        :return:
-        """
-        # First five inputs of the neural network contain the ships distance in each direction.
-        distances = self.inputs[range(5)]
-        # Inputs 6 - 10 contain object classification in each direction (Whether its an object to avoid or go towards)
-        # "Good" object = 0, "Bad" object (avoid) = 1
-        classification = self.inputs[range(5, 10)]
-
-        bad_inds = np.where(classification == 1)[0]
-        bad_distances = distances[bad_inds]
-        bad_distances = np.min(bad_distances)
-
-        if self.validShipPos():
-            good_inds = np.where(classification == 0)[0]
-            if (len(good_inds) != 0):
-                good_distances = distances[good_inds]
-                good_distances = np.min(good_distances)
-                good_distances = 1 / good_distances
-                good_distances = good_distances * self.max_distance
-
-                if (good_distances > 50):
-                    good_distances = 50
-
-                self.fitnessDebug = self.fitnessDebug + good_distances
-                self.fitness2 = self.fitness2 + bad_distances + good_distances
-                self.sawTheGoodPlanet = True
-            else:
-                self.fitness2 = self.fitness2 + bad_distances
-        else:
-            self.fitness2 = self.fitness2 + 1
-
-    def predict(self, red_planets):
-        string_output = "none"
-        X = self.calcInputs(red_planets)
-
-        #########Normalize inputs, want 0 to 1 range########
-        self.inputs = deepcopy(X)
-        X[range(5)] = X[range(5)] / self.max_distance
-
-        #########Make prediction based on inputs##########
-        output = self.mlp.predict(X.reshape(1, -1))[0]
-        if output == 0:
-            string_output = "left"
-        elif output == 1:
-            string_output = "right"
-        return string_output
-
-    def calcInputs(self, red_planets):
-        avoidObject = np.zeros(5)
-        objectDistances = np.zeros(5)
-        # For each direction
-        for i in range(5):
-            # For each planet (+1 is for the good planet)
-            allObjDistances = []
-            for j in range(len(red_planets) + 1):
-                distFromEdge = self.wallIntercept(i)
-                # avoidObject[i] = 1
-                if (j != len(red_planets)):  # If we're not equal to the last planet (that's the good one)
-                    # red_planets[j][0] is the planet center
-                    dist = self.circleIntercept(i, red_planets[j][0], red_planets[j][1])
-                    if (dist == -1):
-                        dist = distFromEdge
-                    allObjDistances.append(dist)
-                else:
-                    # Make the last planet the good one
-                    center = np.array(*[self.level['center_white']])
-                    dist = self.circleIntercept(i, center, self.level['radius_white'])
-                    if (dist == -1):
-                        dist = 99999
-                    # if we set the white planet radius
-                    # to 0 we ignore the white planet
-                    # in the fitness function.
-                    if self.level['radius_white'] != 0:
-                        allObjDistances.append(dist)
-                    else:
-                        allObjDistances.append(99999)
-            objectDistances[i] = min(allObjDistances)
-            ind = allObjDistances.index(objectDistances[i])
-            if (ind != len(red_planets)):
-                avoidObject[i] = 1
-
-        return np.concatenate((objectDistances, avoidObject))
-
-    def wallIntercept(self, direction):
-        # m is the slope of the line. Used to describe line in direction of ship
-        # direction = 4
-
-        if (direction == 0):
-            # straight
-            m = self.tip - self.back
-            x, y = self.tip[0], self.tip[1]
-        if (direction == 1):
-            # left
-            m = self.left - self.right
-            x, y = self.left[0], self.left[1]
-        if (direction == 2):
-            # right
-            m = self.right - self.left
-            x, y = self.right[0], self.right[1]
-        if (direction == 3):
-            # left-staight
-            m = (self.left + self.tip) / 2 - self.right
-            x, y = ((self.left + self.tip) / 2)[0], ((self.left + self.tip) / 2)[1]
-        if (direction == 4):
-            # right-straight
-            m = (self.right + self.tip) / 2 - self.left
-            x, y = ((self.right + self.tip) / 2)[0], ((self.right + self.tip) / 2)[1]
-        # Don't want to divide by zero, so just give m a really high value if x in y/x is 0
-        if (m[0] == 0):
-            m = 999999
-        else:
-            m = m[1] / m[0]
-
-        """ m_lw = the slope of the line that describes the left wall of the game world  """
-        m_lw = 999999
-        m_rw = 999999
-        m_bw = 0
-        m_tw = 0
-
-        """rw = rightWall, lw = leftWall, bw = bottomWall, tw = topWall"""
-        x_lw, y_lw = 0, 0
-        x_rw, y_rw = 1000, 0
-        x_bw, y_bw = 1000, 800
-        x_tw, y_tw = 1000, 0
-
-        m_walls = [m_lw, m_rw, m_bw, m_tw]
-        x_w = [x_lw, x_rw, x_bw, x_tw]
-        y_w = [y_lw, y_rw, y_bw, y_tw]
-
-        lDistances = []
-        for ii in range(4):
-            if (m - m_walls[ii] == 0):
-                x_i = 999999
-            else:
-                x_i = (m * x - y - m_walls[ii] * x_w[ii] + y_w[ii]) / (m - m_walls[ii])
-
-            y_i = m * (x_i - x) + y
-
-            dist = (vector(x_i, y_i) - vector(x, y)).length()
-
-            if (dist != -1):
-                if (direction == 0):
-                    # straight
-                    if (self.back - vector(x_i, y_i)).length() < (self.tip - vector(x_i, y_i)).length():
-                        dist = -1
-                if (direction == 1):
-                    # left
-                    if (self.right - vector(x_i, y_i)).length() < (self.left - vector(x_i, y_i)).length():
-                        dist = -1
-                if (direction == 2):
-                    # right
-                    if (self.left - vector(x_i, y_i)).length() < (self.right - vector(x_i, y_i)).length():
-                        dist = -1
-                if (direction == 3):
-                    # left-staight
-                    if (self.right - vector(x_i, y_i)).length() < ((self.left + self.tip) / 2 - vector(x_i, y_i)).length():
-                        dist = -1
-                if (direction == 4):
-                    # right-straight
-                    if (self.left - vector(x_i, y_i)).length() < ((self.right + self.tip) / 2 - vector(x_i, y_i)).length():
-                        dist = -1
-            if (dist != -1):
-                lDistances.append(dist)
-
-        # For some reason, it didn't get any distances once. This will prevent the game from crashing if that happens
-        if len(lDistances) == 0:
-            lDistances.append(1)
-            # print("Bug!")
-        return np.min(lDistances)
-
-    def circleIntercept(self, direction, planetCenter, planetRadius):
-        """https://math.stackexchange.com/questions/228841/how-do-i-calculate-the-intersections-of-a-straight-line-and-a-circle"""
-
-        # m is the slope of the line. c is the y intercept. used to describe line in direction of ship
-        # direction = 4
-
-        if (direction == 0):
-            # straight
-            m = self.tip - self.back
-            lineStart = self.tip
-        if (direction == 1):
-            # left
-            m = self.left - self.right
-            lineStart = self.left
-        if (direction == 2):
-            # right
-            m = self.right - self.left
-            lineStart = self.right
-        if (direction == 3):
-            # left-staight
-            m = (self.left + self.tip) / 2 - self.right
-            lineStart = (self.left + self.tip) / 2
-        if (direction == 4):
-            # right-straight
-            m = (self.right + self.tip) / 2 - self.left
-            lineStart = (self.right + self.tip) / 2
-        # Don't want to divide by zero, so just give m a really high value if x in y/x is 0
-        if (m[0] == 0):
-            m = 999999
-        else:
-            m = m[1] / m[0]
-
-        # We want left and right 'seeing directions' to be at the back of the ship
-        c = lineStart[1] - m * lineStart[0]
-
-        p = planetCenter[0]  # config['planet_center'][0]
-        q = planetCenter[1]  # config['planet_center'][1]
-        r = planetRadius  # config['planet_radius']
-
-        A = m ** 2 + 1
-        B = 2 * (m * c - m * q - p)
-        C = q ** 2 - r ** 2 + p ** 2 - 2 * c * q + c ** 2
-
-        # If B^2−4AC<0 then the line misses the circle
-        # If B^2−4AC=0 then the line is tangent to the circle.
-        # If B^2−4AC>0 then the line meets the circle in two distinct points.
-        if (B ** 2 - 4 * A * C < 0):
-            x = -1
-            y = -1
-            dist = -1
-        elif (B ** 2 - 4 * A * C == 0):
-            x = -B / (2 * A)
-            y = m * x + c
-            dist = (vector(x, y) - vector(lineStart[0], lineStart[1])).length()
-        else:
-            x1 = (-B + np.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
-            x2 = (-B - np.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
-            y1 = m * x1 + c
-            y2 = m * x2 + c
-
-            l1 = (vector(x1, y1) - vector(lineStart[0], lineStart[1])).length()
-            l2 = (vector(x2, y2) - vector(lineStart[0], lineStart[1])).length()
-
-            # Pick the point on the circle that is closest to the ship
-            if (l1 < l2):
-                x = x1
-                y = y1
-                dist = l1
-            else:
-                x = x2
-                y = y2
-                dist = l2
-
-        # Check to make sure the line intercepts the circle on the front side of the ship
-        if (dist != -1):
-            if (direction == 0):
-                # straight
-                if (self.back - vector(x, y)).length() < (self.tip - vector(x, y)).length():
-                    dist = -1
-            if (direction == 1):
-                # left
-                if (self.right - vector(x, y)).length() < (self.left - vector(x, y)).length():
-                    dist = -1
-            if (direction == 2):
-                # right
-                if (self.left - vector(x, y)).length() < (self.right - vector(x, y)).length():
-                    dist = -1
-            if (direction == 3):
-                # left-staight
-                if (self.right - vector(x, y)).length() < ((self.left + self.tip) / 2 - vector(x, y)).length():
-                    dist = -1
-            if (direction == 4):
-                # right-straight
-                if (self.left - vector(x, y)).length() < ((self.right + self.tip) / 2 - vector(x, y)).length():
-                    dist = -1
-        return dist
-
-    def render(self, color):
-
-        tip = vector(10, 0)
-        left = vector(-5, -5)
-        right = vector(-5, 5)
-
-        for pt in (tip, right, left):
-            pt.rotate_ip(self.angle)
-            pt += self.pos
-        pygame.draw.polygon(self.screen, color, (tip, left, right))
-
-        self.back = (left + right) / 2
-        self.tip, self.left, self.right = tip, left, right
-
-    def physics(self, thrust=0.0, delta_angle=0.0, stop=False, color=Colors.blue):
-        ppos = self.level['center_white']
-
-        # gravity = config["gravity"]*(self.pos-ppos).normalize()
-        dt = game_settings["dt"]
-        if not stop:
-            thrust_vector = vector(1, 0).rotate(self.angle) * thrust
-            # self.velocity = self.velocity + (gravity+thrust_vector)*dt
-            self.velocity = game_settings['speed_multiplier'] * vector(1, 0).rotate(self.angle)
-
-            self.pos = self.pos + self.velocity * dt
-            self.angle += delta_angle
-
-        '''
-        if thrust == 0:
-            color = colors.green
-        else:
-            color = colors.blue
-        '''
-
-        self.render(color)
-
-    # Begin methods to check win conditions
-    def check_orientation(self):
-        pangle = ((self.left - self.right).angle_to(
-            self.pos - game_settings["planet_center"]))
-
-        if pangle > -90 - game_settings["land_angle"] \
-                and pangle < -90 + game_settings["land_angle"]:
-
-            return True
-        else:
-            return False
-
-    def check_red_planets(self, rps):
-        for (ppos, rad) in rps:
-            if (self.tip - ppos).length() < rad:
-                return False
-
-        return True
-
-    def check_speed(self):
-        if self.velocity.length() < game_settings["land_speed"]:
-            return True
-        else:
-            return False
-
-    def check_pos_screen(self):
-        if (self.pos[0] > 0 and self.pos[0] < 1000 and self.pos[1] > 0 and self.pos[1] < 800):
-            return True
-        else:
-            return False
-        # print(self.pos)
-
-    def check_on_planet(self):
-        # if any part of the ship is touching the planet
-        # we have landed
-        for pt in (self.tip, self.left, self.right):
-
-            if (pt - vector(self.level["center_white"])).length() \
-                    < self.level["radius_white"]:
-                return True
-        return False
 
 
 class red_planet:
@@ -846,12 +441,6 @@ class red_planet:
         self.idx += 1
         return item
 
-class Colors:
-    white = (255,) * 3
-    red = (255, 0, 0)
-    green = (0, 128, 0)
-    blue = (0, 142, 204)
-    black = (0, 0, 0)
 
 def open(path, *args, **kwargs):
     wpath = pathlib.PureWindowsPath(path)
