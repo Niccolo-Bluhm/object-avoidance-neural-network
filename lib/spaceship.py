@@ -45,7 +45,11 @@ class SpaceShip:
         self.debug = False
         self.max_distance = vector(self.game_settings['width'], self.game_settings['height']).length()
 
-    def validShipPos(self):
+    def valid_ship_position(self):
+        """This method checks that the ship is within the game window.
+
+        :return: True if ship is within the window, False otherwise
+        """
         # Ensure the entire ship is within the window. Check all points on the ship's triangle.
         # All x coordinates.
         ship_x_vals = np.array([self.tip[0], self.left[0], self.right[0]])
@@ -74,7 +78,7 @@ class SpaceShip:
 
         :return:
         """
-        if not self.validShipPos():
+        if not self.valid_ship_position():
             # If the ship has crashed, only update its fitness a tiny amount
             # TODO: Consider removing this, and having fitness not update at all.
             self.fitness2 = self.fitness2 + 1
@@ -412,8 +416,6 @@ class SpaceShip:
         # if any part of the ship is touching the planet
         # we have landed
         for pt in (self.tip, self.left, self.right):
-
-            if (pt - vector(self.level["center_white"])).length() \
-                    < self.level["radius_white"]:
+            if (pt - vector(self.level["center_white"])).length() < self.level["radius_white"]:
                 return True
         return False

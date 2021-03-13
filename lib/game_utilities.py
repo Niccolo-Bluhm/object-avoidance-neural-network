@@ -132,7 +132,7 @@ class PygView(object):
                         self.ships[j].calculate_position(delta_angle=delta_angle, stop=self.ships[j].crashed, color=ship_colors[j])
 
                         # Did we land?
-                        if self.ships[j].check_on_planet() or self.ships[j].check_pos_screen() == False:
+                        if self.ships[j].check_on_planet() or not self.ships[j].valid_ship_position():
                             self.ships[j].crashed = True
 
                         self.ships[j].updateFitness()
