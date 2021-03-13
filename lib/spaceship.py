@@ -60,6 +60,15 @@ class SpaceShip:
 
         return True
 
+    def reset_location(self):
+        self.pos = self.level['ship']['starting_pos']
+        self.angle = self.level["ship"]['starting_angle']
+        self.velocity = vector(0, 0)
+        self.crashed = False
+        self.fitness2 = 0
+        self.sawTheGoodPlanet = False
+        self.donezo = False
+
     def updateFitness(self):
         """ Update the ships fitness value.
 
@@ -98,26 +107,38 @@ class SpaceShip:
 
     def predict(self, red_planets):
         string_output = "none"
-        X = self.calcInputs(red_planets)
+        network_inputs = self.calculate_mlp_inputs(red_planets)
+        self.inputs = deepcopy(network_inputs)
 
         # Normalize inputs so range is 0 to 1.
-        self.inputs = deepcopy(X)
-        X[range(5)] = X[range(5)] / self.max_distance
+        network_inputs[range(5)] = network_inputs[range(5)] / self.max_distance
 
         # Make prediction based on inputs.
-        output = self.mlp.predict(X.reshape(1, -1))[0]
+        output = self.mlp.predict(network_inputs.reshape(1, -1))[0]
         if output == 0:
             string_output = "left"
         elif output == 1:
             string_output = "right"
         return string_output
 
-    def calcInputs(self, red_planets):
-        avoidObject = np.zeros(5)
-        objectDistances = np.zeros(5)
-        # For each direction
+    def calculate_mlp_inputs(self, red_planets):
+        """This function calculates the neural network inputs.
+        :param red_planets:
+        :return:
+        """
+        object_classifications = np.zeros(5)
+        object_distances = np.zeros(5)
+
+        # Find out distance in each direction.
+        #   For each ray:
+        #       Find all intercepts. Pick closest one.
+
+        # The ship can see in 5 directions, calculate what it sees in each direction.
         for i in range(5):
-            # For each planet (+1 is for the good planet)
+
+
+
+             # For each planet (+1 is for the good planet)
             allObjDistances = []
             for j in range(len(red_planets) + 1):
                 distFromEdge = self.wallIntercept(i)
@@ -129,7 +150,7 @@ class SpaceShip:
                         dist = distFromEdge
                     allObjDistances.append(dist)
                 else:
-                    # Make the last planet the good one
+                    # Make the last planet the good one.
                     center = np.array(*[self.level['center_white']])
                     dist = self.circleIntercept(i, center, self.level['radius_white'])
                     if (dist == -1):
@@ -141,12 +162,12 @@ class SpaceShip:
                         allObjDistances.append(dist)
                     else:
                         allObjDistances.append(99999)
-            objectDistances[i] = min(allObjDistances)
-            ind = allObjDistances.index(objectDistances[i])
+            object_distances[i] = min(allObjDistances)
+            ind = allObjDistances.index(object_distances[i])
             if (ind != len(red_planets)):
-                avoidObject[i] = 1
+                object_classifications[i] = 1
 
-        return np.concatenate((objectDistances, avoidObject))
+        return np.concatenate((object_distances, object_classifications))
 
     def wallIntercept(self, direction):
         # m is the slope of the line. Used to describe line in direction of ship
@@ -346,25 +367,12 @@ class SpaceShip:
         self.back = (left + right) / 2
         self.tip, self.left, self.right = tip, left, right
 
-    def physics(self, thrust=0.0, delta_angle=0.0, stop=False, color=Colors.blue):
-        ppos = self.level['center_white']
-
-        # gravity = config["gravity"]*(self.pos-ppos).normalize()
-        dt = self.game_settings["dt"]
+    def calculate_position(self, delta_angle=0.0, stop=False, color=Colors.blue):
         if not stop:
-            thrust_vector = vector(1, 0).rotate(self.angle) * thrust
-            # self.velocity = self.velocity + (gravity+thrust_vector)*dt
             self.velocity = self.game_settings['speed_multiplier'] * vector(1, 0).rotate(self.angle)
-
+            dt = self.game_settings["dt"]
             self.pos = self.pos + self.velocity * dt
             self.angle += delta_angle
-
-        '''
-        if thrust == 0:
-            color = colors.green
-        else:
-            color = colors.blue
-        '''
 
         self.render(color)
 

@@ -13,7 +13,7 @@ import pathlib
 import builtins
 from lib.genetic_algorithm import mutate, crossover, deconstruct_mlp, construct_mlp
 from lib.spaceship import SpaceShip
-from lib.colors import Colors
+from lib.colors import Colors, generate_ship_colors
 vector = pygame.math.Vector2
 
 
@@ -39,7 +39,6 @@ class PygView(object):
         self.level = self.levels[0]
         self.width = self.game_settings['width']
         self.height = self.game_settings['height']
-        self.fps = self.game_settings['fps']
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
@@ -80,87 +79,58 @@ class PygView(object):
         self.game_over = False
 
     def run(self):
-        """The mainloop
         """
-        running = True
-        ai_key = "none"
-        count = 0
-        while running:
-            da = 0
-            thrust = 0.0
-            for idx, level in enumerate(self.levels):
-                for j in range(self.game_settings['num_ships']):
-                    self.ships[j].level = level
-                    self.ships[j].physics(
-                        delta_angle=da,
-                        thrust=thrust,
-                        stop=self.ships[j].crashed)
 
-                self.resetShipLocs()
+        :return:
+        """
+        # Game Loop.
+        game_running = True
+        ship_colors = generate_ship_colors(len(self.ships))
+        while game_running:
+            delta_angle = 0
+            for idx, level in enumerate(self.levels):
+                for ship in self.ships:
+                    ship.level = level
+                    ship.calculate_position(delta_angle=delta_angle, stop=ship.crashed)
+                    ship.reset_location()
+
                 start_time = time.time()
                 all_crashed = False
-                shipsAlive = 10
-                loopCount = 0
+                ships_alive = 10
+                loop_count = 0
                 while not all_crashed:
                     self.draw_text("Generation:{}".format(self.generation))
-                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx + 1, len(self.levels), shipsAlive)))
+                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx + 1, len(self.levels), ships_alive)))
 
                     # Render the planet
-                    self.do_planet()
+                    self.render_planets(level)
 
+                    # Check if user clicked the exit button.
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        elif event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_r:
+                                self.reset()
+
+                    # Check if we've exceeded the time limit.
                     for j in range(self.game_settings['num_ships']):
-                        if (time.time() - start_time > self.game_settings['time_limit']):
+                        if time.time() - start_time > self.game_settings['time_limit']:
                             self.ships[j].crashed = True
-                        for event in pygame.event.get():
-                            if event.type == pygame.QUIT:
-                                running = False
-                                all_crashed = True
-                            elif event.type == pygame.KEYDOWN:
-                                if event.key == pygame.K_ESCAPE:
-                                    running = False
-                                    all_crashed = True
-                                if event.key == pygame.K_r:
-                                    self.reset()
-                                    # self.resetShipLocs()
 
-                        keys = pygame.key.get_pressed()
-
-                        da = 0
-                        thrust = 0.0
-                        ai_key = self.ships[j].predict(self.planets)
-                        if ai_key == "left":
-                            da = -self.game_settings["delta_angle"]
-                        if ai_key == "right":
-                            da = self.game_settings["delta_angle"]
-                        thrust = self.game_settings["thrust"]
-
-                        if (j == 0):
-                            theColor = (255, 0, 0)
-                        elif (j == 1):
-                            theColor = (255, 114, 0)
-                        elif (j == 2):
-                            theColor = (0, 76, 255)
-                        elif (j == 3):
-                            theColor = (0, 114, 255)
-                        elif (j == 4):
-                            theColor = (0, 144, 255)
-                        elif (j == 5):
-                            theColor = (0, 174, 255)
-                        elif (j == 6):
-                            theColor = (0, 200, 255)
-                        elif (j == 7):
-                            theColor = (0, 230, 255)
-                        elif (j == 8):
-                            theColor = (0, 255, 255)
+                        # TODO: Have neural network scale delta angle based on output
+                        turn_direction = self.ships[j].predict(self.planets)
+                        if turn_direction == "left":
+                            delta_angle = -self.game_settings["delta_angle"]
+                        elif turn_direction == "right":
+                            delta_angle = self.game_settings["delta_angle"]
                         else:
-                            theColor = (0, 255, 255)
+                            delta_angle = 0
 
-                        # Do the physics on the spaceship
-                        self.ships[j].physics(
-                            delta_angle=da,
-                            thrust=thrust,
-                            stop=self.ships[j].crashed,
-                            color=theColor)
+                        # Calculate the updated ship position.
+                        self.ships[j].calculate_position(delta_angle=delta_angle, stop=self.ships[j].crashed, color=ship_colors[j])
+
                         # Did we land?
                         if self.ships[j].check_on_planet() or self.ships[j].check_pos_screen() == False:
                             self.ships[j].crashed = True
@@ -169,24 +139,21 @@ class PygView(object):
 
                         if self.ships[j].check_red_planets(self.planets) == False:
                             self.ships[j].crashed = True
-                            # Give it a mean Penalty.
-                            # self.ships[j].fitness = self.ships[j].fitness + 0.2
-
-                        # Run this again to update fitness
-                        # _ = self.ships[j].predict()
-                        # Run this to update fitness
 
                     pygame.display.flip()
                     self.screen.blit(self.background, (0, 0))
 
-                    shipsAlive = 0
+                    # Limit the framerate so game doesn't run too fast.
+                    self.clock.tick(self.game_settings['fps'])
+
+                    ships_alive = 0
                     all_crashed = True
                     for j in range(self.game_settings['num_ships']):
-                        if (self.ships[j].crashed == False):
+                        if self.ships[j].crashed == False:
                             all_crashed = False
-                            shipsAlive = shipsAlive + 1
+                            ships_alive = ships_alive + 1
 
-                    loopCount = loopCount + 1
+                    loop_count = loop_count + 1
 
                 # Normalize fitness by the number of loops
                 fitnesses = []
@@ -200,7 +167,7 @@ class PygView(object):
                     theMax = self.maxes[idx]
 
                 if (self.game_settings['normalize_fitness'] == True):
-                    fitnesses = np.array(fitnesses) / loopCount
+                    fitnesses = np.array(fitnesses) / loop_count
 
                 self.nfitnesses = self.nfitnesses + np.array(fitnesses)
 
@@ -347,78 +314,31 @@ class PygView(object):
         self.screen.blit(
             surface, ((self.width - fw), (20 - fh)))
 
-    def do_planet(self):
+    def render_planets(self, level):
         """Draw the planet including the gaussian noise
         to simulate erruptions"""
 
-        if self.level["radius_white"] != 0:
-            # angle in radians between points defining the planet
-            res = 0.01
+        # Draw the white circle
+        pygame.draw.circle(self.screen, Colors.white, np.int64(level["center_white"]), level["radius_white"])
 
-            # numer of points defining the planet
-            npoints = int(2 * math.pi // res + 1)
-            thetas = np.arange(0, 2 * math.pi, res)
-            plist = np.zeros((npoints, 2))
-
-            landform = np.random.normal(scale=2, size=(npoints, 2))
-
-            plist[:, 0] = self.level["center_white"][0] + self.level["radius_white"] * np.cos(thetas)
-            plist[:, 1] = self.level["center_white"][1] + self.level["radius_white"] * np.sin(thetas)
-
-            pygame.draw.circle(self.screen, Colors.white, self.level["center_white"], self.level["radius_white"])
-
-        radii = self.level['radii_red']
-        centers = self.level['centers_red']
+        red_radii = level['radii_red']
+        red_centers = level['centers_red']
+        for idx, radius in enumerate(red_radii):
+            pygame.draw.circle(self.screen, Colors.red, red_centers[idx], radius)
 
         self.planets = []
-        for i in range(len(centers)):
-            np_center = vector(centers[i])
-            rp = red_planet(self.screen, np_center, radii[i])
+        for i in range(len(red_centers)):
+            np_center = vector(red_centers[i])
+            rp = red_planet(self.screen, np_center, red_radii[i])
             self.planets.append(rp)
-            self.planets[i].render()
-
-        return None
-
-    def resetShipLocs(self):
-        """Reset the ship locations, but not their neural net weights"""
-
-        for i in range(self.game_settings['num_ships']):
-            self.ships[i].pos = self.level['ship']['starting_pos']
-            self.ships[i].angle = self.level["ship"]['starting_angle']
-            self.ships[i].velocity = vector(0, 0)
-            self.ships[i].crashed = False
-            self.ships[i].fitness2 = 0
-            self.ships[i].sawTheGoodPlanet = False
-            self.ships[i].donezo = False
 
 
 class red_planet:
-
     def __init__(self, screen, center, radius):
         self.screen = screen
         self.radius = radius
         self.center = center
         self.idx = 0
-
-    def render(self):
-        """
-        # angle in radians between points defining the planet
-        res = 0.01
-
-
-        # numer of points defining the planet
-
-        npoints = int( 2*math.pi//res + 1)
-        thetas = np.arange(0, 2*math.pi, res)
-        plist = np.zeros((npoints, 2))
-
-        landform = np.random.normal( scale=5, size=( npoints, 2) )
-
-        plist[:, 0] = self.center[0] + self.radius*np.cos(thetas)
-        plist[:, 1] = self.center[1] + self.radius*np.sin(thetas)
-
-        pygame.draw.polygon (self.screen, colors.red, plist+landform  )"""
-        pygame.draw.circle(self.screen, Colors.red, np.int64(self.center), self.radius)
 
     def __getitem__(self, key):
         if key == 0:
@@ -440,6 +360,7 @@ class red_planet:
             raise StopIteration("Iter error")
         self.idx += 1
         return item
+
 
 
 def open(path, *args, **kwargs):

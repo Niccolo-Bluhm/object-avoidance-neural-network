@@ -7,7 +7,7 @@
   "delta_angle": 2,
   "thrust": 0.01,
   "dt": 5,
-  "num_ships": 10,
+  "num_ships": 20,
   "starting_pos": [20, 20],
   "starting_angle": 45,
   "speed_multiplier": 1.35,
