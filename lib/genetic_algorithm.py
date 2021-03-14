@@ -2,11 +2,67 @@ from copy import deepcopy
 import numpy as np
 
 
-def mutate(mlp):
+def select_and_evolve(space_ships):
+    """Given a list of space ships, this function selects the most fit of the population, crossbreeds and mutates them,
+    and passes them to the next generation.
+
+    :param space_ships: list of SpaceShip objects.
+    :return: List of SpaceShip objects.
+    """
+
+    # Remove the pygame screen because it cannot be deepcopied.
+    screen_backup = space_ships[0].screen
+    for ship in space_ships:
+        ship.screen = None
+
+    # The lower the distance, the better the ship did (It got closer to the white planet)
+    distance_list = np.array([ship.cumulative_distance_from_goal for ship in space_ships])
+
+    # Sort ships in order of distance, with the ship at index 0 having the lowest distance from the white planet.
+    indices = np.argsort(distance_list)
+    sorted_distance = distance_list[indices]
+    sorted_ships = [space_ships[idx] for idx in indices]
+
+    # Invert the distance values, so that the smaller the distance, the higher the fitness.
+    fitness = 1 / sorted_distance
+
+    # Normalize the fitness scores.
+    scores_sum = np.sum(fitness)
+    probabilities = fitness / scores_sum
+
+    # Take best performing ships (top 20%) and introduce directly to next round.
+    new_ships = []
+    num_top_ships = int(len(sorted_ships) * 0.2)
+    for idx in range(num_top_ships):
+        new_ships.append(deepcopy(sorted_ships[idx]))
+
+    # Take a weighted selection of 10% of ships, mutate them, and introduce to next round (Skip crossover)
+    num_ten_percent = int(len(sorted_ships) * 0.1)
+    ships_to_mutate = np.random.choice(sorted_ships, size=num_ten_percent, replace=False, p=probabilities)
+    for ship in ships_to_mutate:
+        new_ships.append(mutate(ship))
+
+    # Whatever ships we have left mutate + crossbreed
+    for idx in range(len(sorted_ships) - len(new_ships)):
+        # Select two parents
+        parents = np.random.choice(sorted_ships, size=2, replace=False, p=probabilities)
+        child_ship = crossover(parents[0], parents[1])
+        new_ships.append(mutate(child_ship))
+
+    # Add screen property back in.
+    for ship in new_ships:
+        ship.screen = screen_backup
+
+    return new_ships
+
+
+def mutate(ship):
     """We are going to combine all the weights into one 1D array.
     After chaning the weights, we need to reshape them back into their original form."""
+    ship = deepcopy(ship)
+
     # The Neural network for this ship.
-    mlp = deepcopy(mlp)
+    mlp = ship.mlp
 
     all_weights, all_biases = deconstruct_mlp(mlp)
 
@@ -32,17 +88,22 @@ def mutate(mlp):
     # Reconstruct
     mlp = construct_mlp(mlp, all_weights, all_biases)
 
-    return mlp
+    ship.mlp = mlp
+
+    return ship
 
 
-def crossover(mlp1, mlp2):
+def crossover(ship1, ship2):
     """We are going to combine all the weights into one 1D array.
     After changing the weights, we need to reshape them back into their original form."""
 
-    mlp1 = deepcopy(mlp1)
+    ship1 = deepcopy(ship1)
+    ship2 = deepcopy(ship2)
+
+    mlp1 = ship1.mlp
     weights1, biases1 = deconstruct_mlp(mlp1)
 
-    mlp2 = deepcopy(mlp2)
+    mlp2 = ship2.mlp
     weights2, biases2 = deconstruct_mlp(mlp2)
 
     # The number of biases to crossover, anywhere from 5 to 25%.
@@ -59,7 +120,10 @@ def crossover(mlp1, mlp2):
     # Reconstruct
     mlp1 = construct_mlp(mlp1, weights1, biases1)
 
-    return mlp1
+    output_ship = ship1
+    output_ship.mlp = mlp1
+
+    return output_ship
 
 
 def deconstruct_mlp(mlp):

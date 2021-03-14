@@ -5,6 +5,7 @@ import numpy as np
 from lib.genetic_algorithm import mutate, crossover, deconstruct_mlp, construct_mlp
 from lib.colors import Colors
 vector = pygame.math.Vector2
+MAX_ANGLE = 180
 
 
 class SpaceShip:
@@ -13,7 +14,7 @@ class SpaceShip:
         self.game_settings = game_settings
 
         # Neural Network Structure. Hidden layer size is loaded from the game_settings file.
-        n_inputs = 10
+        n_inputs = 15
         n_hidden = self.game_settings['hidden_layer_sizes']
         n_output = 1
 
@@ -36,7 +37,7 @@ class SpaceShip:
         self.screen = screen
         self.velocity = vector(0, 0)
         self.crashed = False
-        self.fitness = 0
+        self.cumulative_distance_from_goal = 0
         self.inputs = np.zeros(n_inputs)
         self.fitness2 = 0
         self.fitnessDebug = 0
@@ -44,6 +45,8 @@ class SpaceShip:
         self.donezo = False
         self.debug = False
         self.max_distance = vector(self.game_settings['width'], self.game_settings['height']).length()
+        self.ship_won = False
+        self.distance_from_goal = float('inf')
 
     def valid_ship_position(self):
         """This method checks that the ship is within the game window.
@@ -56,10 +59,10 @@ class SpaceShip:
         # All y coordinates.
         ship_y_vals = np.array([self.tip[1], self.left[1], self.right[1]])
 
-        #TODO: Verify width corresponds to x and height to y
+        # TODO: Verify width corresponds to x and height to y
         if np.any(ship_x_vals < 0) or np.any(ship_x_vals > self.game_settings['width']):
             return False
-        if np.any(ship_y_vals < 0) or np.any(ship_x_vals > self.game_settings['height']):
+        if np.any(ship_y_vals < 0) or np.any(ship_y_vals > self.game_settings['height']):
             return False
 
         return True
@@ -70,35 +73,50 @@ class SpaceShip:
         self.velocity = vector(0, 0)
         self.crashed = False
         self.fitness2 = 0
+        self.cumulative_distance_from_goal = 0
         self.sawTheGoodPlanet = False
         self.donezo = False
+        self.ship_won = False
+        self.distance_from_goal = float('inf')
 
-    def updateFitness(self):
-        """ Update the ships fitness value.
+    def update_fitness(self):
+        """Updates the ships fitness value.
 
-        :return:
+        :param fitness_data: Dictionary with keys 'distances' and 'classifications'. Distances is a 5 element array with
+                             the distance to each object. Classification is a 5 element array with the object
+                             classification, 0 for a bad planet and 1 for a good planet.
+        :return: None
         """
-        if not self.valid_ship_position():
-            # If the ship has crashed, only update its fitness a tiny amount
-            # TODO: Consider removing this, and having fitness not update at all.
-            self.fitness2 = self.fitness2 + 1
+
+        # When a ship penetrates a planet, its distance from that planet will be negative.
+        # Ensure that it is always a positive number so the algorithm doesn't break farther downstream.
+        if self.distance_from_goal < 0:
+            distance = 1
+        else:
+            distance = self.distance_from_goal
+
+        self.cumulative_distance_from_goal += distance
+
+        '''
+        # If the ship has crashed into a wall or red planet, do not update its fitness value.
+        if self.crashed and not self.ship_won:
             return
 
-        # First five inputs of the neural network contain the ships distance in each direction.
-        distances = self.inputs[range(5)]
-        # Inputs 6 - 10 contain object classification in each direction (Whether its an object to avoid or go towards)
-        # "Good" object = 0, "Bad" object (avoid) = 1
-        classification = self.inputs[range(5, 10)]
+        distances = fitness_data['distances']
+        classifications = fitness_data['classifications']
 
-        bad_object_idx = np.where(classification == 1)[0]
+        bad_object_idx = np.where(classifications == 0)[0]
         bad_distances = distances[bad_object_idx]
-        bad_distances = np.min(bad_distances)
-        good_inds = np.where(classification == 0)[0]
+        closest_distance = np.min(bad_distances)
+
+
+
+        good_inds = np.where(classifications == 1)[0]
         if len(good_inds) != 0:
             good_distances = distances[good_inds]
             good_distances = np.min(good_distances)
             good_distances = 1 / good_distances
-            good_distances = good_distances * self.max_distance
+            good_distances = abs(good_distances * self.max_distance)
 
             if good_distances > 50:
                 good_distances = 50
@@ -108,28 +126,110 @@ class SpaceShip:
             self.sawTheGoodPlanet = True
         else:
             self.fitness2 = self.fitness2 + bad_distances
+        '''
 
-    def predict(self, red_planets):
-        string_output = "none"
-        network_inputs = self.calculate_mlp_inputs(red_planets)
-        self.inputs = deepcopy(network_inputs)
+    def predict(self):
+        direction = "none"
+        distances, angles, classifications = self.calculate_mlp_inputs()
+
+        # Check if the ship has crashed into anything.
+        if np.any(distances <= 0):
+            self.crashed = True
+
+        # Check if the ship reached the 'good' planet.
+        #good_planet_idx = np.where(classifications == 1)[0]
+        #if len(good_planet_idx) > 0 and distances[good_planet_idx] <= 0:
+        #   self.ship_won = True
+
+        # Store the distance from the white planet (Used in fitness calculation).
+        good_planet_idx = np.where(classifications == 1)[0][0]
+        self.distance_from_goal = distances[good_planet_idx]
+
+        # Sort distances and keep the five closest objects.
+        indices = np.argsort(distances)[0:5]
 
         # Normalize inputs so range is 0 to 1.
-        network_inputs[range(5)] = network_inputs[range(5)] / self.max_distance
+        distances_norm = distances[indices] / self.max_distance
+        angles_norm = angles[indices] / MAX_ANGLE
+        mlp_inputs = np.concatenate((distances_norm, angles_norm, classifications[indices]))
+
+        # Get data for fitness calculation.
+        fitness_data = {'distances': distances, 'classifications': classifications}
 
         # Make prediction based on inputs.
-        output = self.mlp.predict(network_inputs.reshape(1, -1))[0]
+        output = self.mlp.predict(mlp_inputs.reshape(1, -1))[0]
         if output == 0:
-            string_output = "left"
+            direction = "left"
         elif output == 1:
-            string_output = "right"
-        return string_output
+            direction = "right"
 
-    def calculate_mlp_inputs(self, red_planets):
-        """This function calculates the neural network inputs.
+        return direction, fitness_data
+
+    def calculate_mlp_inputs(self):
+        """This function calculates the neural network inputs. It checks the ships distance from all walls and planets
+        in the game, and returns the 5 closest objects and their distance + angle.
+
         :param red_planets:
         :return:
         """
+
+        # Object classifications. 0 is for a bad object (object to avoid, i.e. a wall or red planet), 1 is for good.
+        # Left wall, right wall, top wall, bottom wall.
+        classifications = [0, 0, 0, 0]
+
+        # Distance from each wall.
+        distance_from_left   = self.tip[0]
+        distance_from_right  = self.game_settings['width'] - self.tip[0]
+        distance_from_bottom = self.game_settings['height'] - self.tip[1]
+        distance_from_top    = self.tip[1]
+
+        # Angle to closest point on each wall. Coords of closest point on wall - ship coordinates.
+        left_vector   = vector([0, self.tip[1]]) - self.tip
+        right_vector  = vector([self.game_settings['width'], self.tip[1]]) - self.tip
+        bottom_vector = vector([self.tip[0], self.game_settings['height']]) - self.tip
+        top_vector = vector([self.tip[0], 0]) - self.tip
+
+        # Calculate the ship vector.
+        back_point = (self.right + self.left) / 2
+        ship_vector = self.tip - back_point
+
+        angles = [ship_vector.angle_to(left_vector), ship_vector.angle_to(right_vector),
+                  ship_vector.angle_to(bottom_vector), ship_vector.angle_to(top_vector)]
+
+        distances = [distance_from_left, distance_from_right, distance_from_bottom, distance_from_top]
+
+        # Calculate the distance between the ship and each red planet.
+        for idx, radius in enumerate(self.level["radii_red"]):
+            ship_to_planet_vector = (self.tip - vector(self.level["centers_red"][idx]))
+            distance = ship_to_planet_vector.length() - radius
+            distances.append(distance)
+            classifications.append(0)
+            angles.append(ship_vector.angle_to(ship_to_planet_vector))
+
+        # Calculate the distance between the ship and the white planet.
+        ship_to_planet_vector = (self.tip - vector(self.level["center_white"]))
+        distance = ship_to_planet_vector.length() - self.level["radius_white"]
+        distances.append(distance)
+        classifications.append(1)
+        angles.append(ship_vector.angle_to(ship_to_planet_vector))
+
+        # Convert everything to numpy arrays.
+        distances = np.array(distances)
+        angles = np.array(angles)
+        classifications = np.array(classifications)
+
+        return distances, angles, classifications
+
+
+        '''
+        # (pt - vector(self.level["center_white"])).length() < self.level["radius_white"]:
+
+        if self.tip[0] < 0 or self.tip[0] > self.game_settings['width']:
+            return False
+        if self.tip[1] < 0 or self.tip[1] > self.game_settings['height']:
+            return False
+
+
         object_classifications = np.zeros(5)
         object_distances = np.zeros(5)
 
@@ -172,6 +272,7 @@ class SpaceShip:
                 object_classifications[i] = 1
 
         return np.concatenate((object_distances, object_classifications))
+        '''
 
     def wallIntercept(self, direction):
         # m is the slope of the line. Used to describe line in direction of ship
@@ -382,12 +483,9 @@ class SpaceShip:
 
     # Begin methods to check win conditions
     def check_orientation(self):
-        pangle = ((self.left - self.right).angle_to(
-            self.pos - self.game_settings["planet_center"]))
+        pangle = ((self.left - self.right).angle_to(self.pos - self.game_settings["planet_center"]))
 
-        if pangle > -90 - self.game_settings["land_angle"] \
-                and pangle < -90 + self.game_settings["land_angle"]:
-
+        if pangle > -90 - self.game_settings["land_angle"] and pangle < -90 + self.game_settings["land_angle"]:
             return True
         else:
             return False

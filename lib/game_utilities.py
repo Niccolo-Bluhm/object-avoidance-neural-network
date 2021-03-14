@@ -11,7 +11,7 @@ import json
 import sys
 import pathlib
 import builtins
-from lib.genetic_algorithm import mutate, crossover, deconstruct_mlp, construct_mlp
+from lib.genetic_algorithm import select_and_evolve, mutate, crossover, deconstruct_mlp, construct_mlp
 from lib.spaceship import SpaceShip
 from lib.colors import Colors, generate_ship_colors
 vector = pygame.math.Vector2
@@ -30,6 +30,8 @@ class PygView(object):
         level_files = os.listdir(level_dir)
         self.levels = []
         for file in level_files:
+            if not file.endswith(".txt"):
+                continue
             with open(os.path.join(level_dir, file)) as json_file:
                 self.levels.append(json.load(json_file))
 
@@ -44,7 +46,6 @@ class PygView(object):
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont('mono', 20, bold=True)
         self.planetFinished = False
-        self.planets = []
         self.ship = SpaceShip(self.screen, self.level, self.game_settings)
         self.ships = []
         for i in range(self.game_settings['num_ships']):
@@ -120,7 +121,7 @@ class PygView(object):
                             self.ships[j].crashed = True
 
                         # TODO: Have neural network scale delta angle based on output
-                        turn_direction = self.ships[j].predict(self.planets)
+                        turn_direction, fitness_data = self.ships[j].predict()
                         if turn_direction == "left":
                             delta_angle = -self.game_settings["delta_angle"]
                         elif turn_direction == "right":
@@ -131,15 +132,6 @@ class PygView(object):
                         # Calculate the updated ship position.
                         self.ships[j].calculate_position(delta_angle=delta_angle, stop=self.ships[j].crashed, color=ship_colors[j])
 
-                        # Did we land?
-                        if self.ships[j].check_on_planet() or not self.ships[j].valid_ship_position():
-                            self.ships[j].crashed = True
-
-                        self.ships[j].updateFitness()
-
-                        if self.ships[j].check_red_planets(self.planets) == False:
-                            self.ships[j].crashed = True
-
                     pygame.display.flip()
                     self.screen.blit(self.background, (0, 0))
 
@@ -149,152 +141,19 @@ class PygView(object):
                     ships_alive = 0
                     all_crashed = True
                     for j in range(self.game_settings['num_ships']):
-                        if self.ships[j].crashed == False:
+                        if not self.ships[j].crashed:
                             all_crashed = False
                             ships_alive = ships_alive + 1
 
                     loop_count = loop_count + 1
 
-                # Normalize fitness by the number of loops
-                fitnesses = []
-                for p in range(self.game_settings['num_ships']):
-                    fitnesses.append(deepcopy(self.ships[p].fitness2))
-                theMax = max(fitnesses)
+                # Update fitness values.
+                for ship in self.ships:
+                    ship.update_fitness()
 
-                if (theMax > self.maxes[idx]):
-                    self.maxes[idx] = theMax
-                else:
-                    theMax = self.maxes[idx]
-
-                if (self.game_settings['normalize_fitness'] == True):
-                    fitnesses = np.array(fitnesses) / loop_count
-
-                self.nfitnesses = self.nfitnesses + np.array(fitnesses)
-
-            self.updateWeights()
+            self.ships = select_and_evolve(self.ships)
 
         pygame.quit()
-
-    def updateWeights(self):
-        newShips = []
-
-        scores = np.zeros(self.game_settings['num_ships'])
-        for i in range(self.game_settings['num_ships']):
-            scores[i] = deepcopy(self.nfitnesses[i])  # deepcopy(self.ships[i].fitness2)
-
-        scores_sort = np.sort(scores)[::-1]
-        # Invert. Make highest scores to Lowest
-        # scores_sort = 1/scores_sort
-
-        reject = True
-        if (scores_sort[0] >= self.bestScore):
-            self.bestScore = scores_sort[0]
-            reject = False
-        scores_sort_ind = scores.argsort()[::-1]  # Descending order (highest to lowest)
-
-        ##### PRINT STUFF #####
-        print("")
-        print("Generation: ", self.generation)
-        for i in range(self.game_settings['num_ships']):
-            print("Ship Score:", scores[scores_sort_ind[i]], self.ships[scores_sort_ind[i]].fitnessDebug, "Weight:")
-
-        # If we did worse than before, reject this generation
-
-        reject = False
-        if reject:
-            scores = np.zeros(self.game_settings['num_ships'])
-            for i in range(self.game_settings['num_ships']):
-                scores[i] = deepcopy(self.prevFitness[i])
-                self.ships[i].mlp = deepcopy(self.prevShips[i])
-
-                # self.ships[i].fitness2 = deepcopy(self.prevFitness[i])
-
-            scores_sort = np.sort(scores)[::-1]
-            # Invert. Make highest scores to Lowest
-            # scores_sort = 1/scores_sort
-            print("Generation Rejected")
-
-        self.generation = self.generation + 1
-        for i in range(self.game_settings['num_ships']):
-            # Get Weight value of best ship
-            NN1 = deepcopy(self.ships[scores_sort_ind[i]].mlp)
-            intercepts = np.concatenate((NN1.intercepts_[0], NN1.intercepts_[1]))
-            weights1 = NN1.coefs_[0].flatten()
-            weights2 = NN1.coefs_[1].flatten()
-            allWeights = np.concatenate((intercepts, weights1, weights2))
-            weightSum = deepcopy(np.sum(allWeights))
-
-            # pickle info of best ship
-            if scores_sort_ind[i] == 0 and not reject:
-                logdict = {
-                    'ship_num': i,
-                    'weights1': NN1.coefs_[0],
-                    'weights2': NN1.coefs_[1],
-                    'intercepts1': NN1.intercepts_[0],
-                    'intercepts2': NN1.intercepts_[1],
-                    'Generation': self.generation,
-                    'timestamp': datetime.datetime.now(),
-                    'score': scores[scores_sort_ind[i]]
-                }
-                self.logLst.append(logdict)
-                fname = "best.pkl"
-                # fname = "{}_best.pkl".format(datetime.datetime.now().isoformat().replace(':','-'))
-
-                with open(fname, 'wb') as pfd:
-                    pickle.dump(self.logLst, pfd)
-
-        # print(self.bestScore)
-        #########################
-
-        # Sort the scores from low value to high values
-        # Low values indicate a better score (Closer to landing zone)
-        scores_sort_ind = scores.argsort()[::-1]
-        sortedShips = []
-        for i in range(self.game_settings['num_ships']):
-            sortedShips.append(deepcopy(self.ships[scores_sort_ind[i]].mlp))
-
-        # Normalize the fitness scores
-        scores_sum = np.sum(scores_sort)
-        scores_sort = scores_sort / scores_sum
-        probabilities = scores_sort
-
-        # Take best performing ships(Top 20%) and introduce directly to next round
-        num_bestShips = int(np.floor(self.game_settings['num_ships'] * 0.2))
-        for i in range(num_bestShips):
-            newShips.append(deepcopy(self.ships[scores_sort_ind[i]].mlp))
-
-        # Take two parents, mutate them, and introduce to next round (Skip crossover)
-        for i in range(2):
-            parents1 = np.random.choice(range(self.game_settings['num_ships']), size=2, replace=False, p=probabilities)
-            theNewMlp1 = mutate(sortedShips[parents1[0]])
-            newShips.append(deepcopy(theNewMlp1))
-
-        # Whatever ships we have left mutate + crossbreed
-        for i in range(int(self.game_settings['num_ships'] - len(newShips))):
-            # Select two parents
-            parents = np.random.choice(range(self.game_settings['num_ships']), size=2, replace=False, p=probabilities)
-
-            NN = crossover(sortedShips[parents[0]], sortedShips[parents[1]])
-            theNewMlp = mutate(NN)
-            # theNewMlp = self.mutate(sortedShips[parents[0]])
-
-            newShips.append(deepcopy(theNewMlp))
-
-        # Save the previous ships incase all the new ships are worse
-        # We don't currently need this because we're always carrying the
-        # best ships to the next round
-        if (reject == False):
-            self.prevShips = []
-            self.prevFitness = []
-            for i in range(len(self.ships)):
-                self.prevShips.append(deepcopy(self.ships[i].mlp))
-                self.prevFitness = deepcopy(self.nfitnesses)
-
-        for i in range(len(self.ships)):
-            self.ships[i].mlp = deepcopy(newShips[i])
-            self.ships[i].fitnessDebug = 0
-
-        self.nfitnesses = np.zeros(self.game_settings['num_ships'])
 
     def draw_text(self, text):
         """
@@ -325,44 +184,3 @@ class PygView(object):
         red_centers = level['centers_red']
         for idx, radius in enumerate(red_radii):
             pygame.draw.circle(self.screen, Colors.red, red_centers[idx], radius)
-
-        self.planets = []
-        for i in range(len(red_centers)):
-            np_center = vector(red_centers[i])
-            rp = red_planet(self.screen, np_center, red_radii[i])
-            self.planets.append(rp)
-
-
-class red_planet:
-    def __init__(self, screen, center, radius):
-        self.screen = screen
-        self.radius = radius
-        self.center = center
-        self.idx = 0
-
-    def __getitem__(self, key):
-        if key == 0:
-            return self.center
-
-        elif key == 1:
-            return self.radius
-
-        raise KeyError("red planet index must be 0 or 1 not ", key)
-
-    def __iter__(self):
-        self.idx = 0
-        return self
-
-    def __next__(self):
-        try:
-            item = (self.center, self.radius)[self.idx]
-        except IndexError:
-            raise StopIteration("Iter error")
-        self.idx += 1
-        return item
-
-
-
-def open(path, *args, **kwargs):
-    wpath = pathlib.PureWindowsPath(path)
-    return builtins.open(str(pathlib.Path(wpath)), *args, **kwargs)
