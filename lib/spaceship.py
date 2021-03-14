@@ -197,8 +197,8 @@ class SpaceShip:
         self.back = (left + right) / 2
         self.tip, self.left, self.right = tip, left, right
 
-    def calculate_position(self, delta_angle=0.0, stop=False, color=Colors.blue):
-        if not stop:
+    def calculate_position(self, delta_angle=0.0, color=Colors.blue):
+        if not self.crashed:
             self.velocity = self.game_settings['speed_multiplier'] * vector(1, 0).rotate(self.angle)
             dt = self.game_settings["dt"]
             self.pos = self.pos + self.velocity * dt

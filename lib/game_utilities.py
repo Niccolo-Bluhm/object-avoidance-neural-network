@@ -67,7 +67,7 @@ class PygView(object):
             for idx, level in enumerate(self.levels):
                 for ship in self.ships:
                     ship.level = level
-                    ship.calculate_position(delta_angle=delta_angle, stop=ship.crashed)
+                    ship.calculate_position(delta_angle=delta_angle)
                     ship.reset_location()
 
                 start_time = time.time()
@@ -105,7 +105,7 @@ class PygView(object):
                             delta_angle = 0
 
                         # Calculate the updated ship position.
-                        self.ships[j].calculate_position(delta_angle=delta_angle, stop=self.ships[j].crashed, color=ship_colors[j])
+                        self.ships[j].calculate_position(delta_angle=delta_angle, color=ship_colors[j])
 
                     pygame.display.flip()
                     self.screen.blit(self.background, (0, 0))
@@ -136,8 +136,7 @@ class PygView(object):
         fw, fh = self.font.size(text)  # fw: font width,  fh: font height
         surface = self.font.render(text, True, (0, 255, 0))
         # // makes integer division in python3
-        self.screen.blit(
-            surface, ((self.width - fw), (self.height - fh)))
+        self.screen.blit(surface, ((self.width - fw), (self.height - fh)))
 
     def draw_text_top(self, text):
         """
