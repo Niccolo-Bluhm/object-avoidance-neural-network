@@ -37,7 +37,6 @@ class PygView(object):
 
         pygame.init()
         pygame.display.set_caption("Press ESC to quit")
-
         self.level = self.levels[0]
         self.width = self.game_settings['width']
         self.height = self.game_settings['height']
@@ -45,45 +44,21 @@ class PygView(object):
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont('mono', 20, bold=True)
-        self.planetFinished = False
-        self.ship = SpaceShip(self.screen, self.level, self.game_settings)
         self.ships = []
         for i in range(self.game_settings['num_ships']):
             self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
-        self.Newships = []
         self.game_over = False
         self.stop_printing = False
         self.generation = 0
-        self.bestScore = 0
-        self.prevShips = []
-        self.prevFitness = []
-        self.logLst = []
-        self.nfitnesses = np.zeros(self.game_settings['num_ships'])
-
-        self.maxes = np.zeros(len(self.levels))
 
         if self.game_settings['ship_file'] is not None:
             self.loadShips()
-
-    def loadShips(self):
-        with open(self.game_settings['ship_file'], 'rb') as f:
-            lShipData = pickle.load(f)
-
-        for i in range(self.game_settings['num_ships']):
-            self.ships[i].mlp.intercepts_[0] = lShipData[-1]['intercepts1']
-            self.ships[i].mlp.intercepts_[1] = lShipData[-1]['intercepts2']
-            self.ships[i].mlp.coefs_[0] = lShipData[-1]['weights1']
-            self.ships[i].mlp.coefs_[1] = lShipData[-1]['weights2']
 
     def reset(self):
         self.ship = SpaceShip(self.screen, self.level, self.game_settings)
         self.game_over = False
 
     def run(self):
-        """
-
-        :return:
-        """
         # Game Loop.
         game_running = True
         ship_colors = generate_ship_colors(len(self.ships))
@@ -170,8 +145,7 @@ class PygView(object):
         fw, fh = self.font.size(text)  # fw: font width,  fh: font height
         surface = self.font.render(text, True, (0, 255, 0))
         # // makes integer division in python3
-        self.screen.blit(
-            surface, ((self.width - fw), (20 - fh)))
+        self.screen.blit(surface, ((self.width - fw), (20 - fh)))
 
     def render_planets(self, level):
         """Draw the planet including the gaussian noise
