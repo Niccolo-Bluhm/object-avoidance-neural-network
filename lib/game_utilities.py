@@ -63,68 +63,64 @@ class PygView(object):
         game_running = True
         ship_colors = generate_ship_colors(len(self.ships))
         while game_running:
-            delta_angle = 0
-            for idx, level in enumerate(self.levels):
-                for ship in self.ships:
-                    ship.level = level
-                    ship.calculate_position(delta_angle=delta_angle)
-                    ship.reset_location()
+            #for idx, level in enumerate(self.levels):
+            level = self.levels[0]
+            for i, ship in enumerate(self.ships):
+                ship.level = level
+                ship.color = ship_colors[i]
+                ship.reset_location()
 
-                start_time = time.time()
-                all_crashed = False
-                ships_alive = 10
-                loop_count = 0
-                while not all_crashed:
-                    self.draw_text("Generation:{}".format(self.generation))
-                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx + 1, len(self.levels), ships_alive)))
+                weights, biases = deconstruct_mlp(ship.mlp)
+                weight_sum = np.sum(weights)
+                print(weight_sum)
+            print('\n')
 
-                    # Render the planet
-                    self.render_planets(level)
+            start_time = time.time()
+            all_crashed = False
+            while not all_crashed:
+                self.draw_text("Generation:{}".format(self.generation))
+                self.draw_text_top(("Level: {} of {} Ships Alive: {}".format( 1, len(self.levels), 1)))
 
-                    # Check if user clicked the exit button.
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            sys.exit()
-                        elif event.type == pygame.KEYDOWN:
-                            if event.key == pygame.K_r:
-                                self.reset()
+                # Render the planet
+                self.render_planets(level)
 
-                    # Check if we've exceeded the time limit.
-                    for j in range(self.game_settings['num_ships']):
-                        if time.time() - start_time > self.game_settings['time_limit']:
-                            self.ships[j].crashed = True
+                # Check if user clicked the exit button.
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        all_crashed = True
+                        game_running = False
+                        pygame.quit()
+                        sys.exit()
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_r:
+                            self.reset()
 
-                        # TODO: Have neural network scale delta angle based on output
-                        turn_direction, fitness_data = self.ships[j].predict()
-                        if turn_direction == "left":
-                            delta_angle = -self.game_settings["delta_angle"]
-                        elif turn_direction == "right":
-                            delta_angle = self.game_settings["delta_angle"]
-                        else:
-                            delta_angle = 0
+                # Check if we've exceeded the time limit.
+                for ship_obj in self.ships:
+                    if time.time() - start_time > self.game_settings['time_limit']:
+                        ship_obj.crashed = True
 
-                        # Calculate the updated ship position.
-                        self.ships[j].calculate_position(delta_angle=delta_angle, color=ship_colors[j])
+                    # TODO: Have neural network scale delta angle based on output
+                    turn_direction = ship_obj.predict()
+                    if turn_direction == "left":
+                        delta_angle = -self.game_settings["delta_angle"]
+                    elif turn_direction == "right":
+                        delta_angle = self.game_settings["delta_angle"]
+                    else:
+                        delta_angle = 0
 
-                    pygame.display.flip()
-                    self.screen.blit(self.background, (0, 0))
+                    # Calculate the updated ship position.
+                    ship_obj.calculate_position(delta_angle=delta_angle)
+                    ship_obj.update_fitness()
 
-                    # Limit the framerate so game doesn't run too fast.
-                    self.clock.tick(self.game_settings['fps'])
+                pygame.display.flip()
+                self.screen.blit(self.background, (0, 0))
 
-                    ships_alive = 0
+                # Limit the framerate so game doesn't run too fast.
+                self.clock.tick(self.game_settings['fps'])
+
+                if np.all([ship.crashed for ship in self.ships]):
                     all_crashed = True
-                    for j in range(self.game_settings['num_ships']):
-                        if not self.ships[j].crashed:
-                            all_crashed = False
-                            ships_alive = ships_alive + 1
-
-                    loop_count = loop_count + 1
-
-                # Update fitness values.
-                for ship in self.ships:
-                    ship.update_fitness()
 
             self.ships = select_and_evolve(self.ships)
 

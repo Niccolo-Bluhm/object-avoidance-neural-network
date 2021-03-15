@@ -16,17 +16,17 @@ def select_and_evolve(space_ships):
         ship.screen = None
 
     # The lower the distance, the better the ship did (It got closer to the white planet)
-    distance_list = np.array([ship.cumulative_distance_from_goal for ship in space_ships])
+    fitness_list = np.array([ship.fitness for ship in space_ships])
 
-    # Sort ships in order of distance, with the ship at index 0 having the lowest distance from the white planet.
-    indices = np.argsort(distance_list)
-    sorted_distance = distance_list[indices]
+    # Sort ships in order of fitness, with the ship at index 0 having the highest fitness.
+    indices = np.argsort(fitness_list)[::-1]
+    fitness = fitness_list[indices]
     sorted_ships = [space_ships[idx] for idx in indices]
 
-    # Invert the distance values, so that the smaller the distance, the higher the fitness.
-    fitness = 1 / sorted_distance
+    print('\n')
+    print(fitness)
 
-    # Normalize the fitness scores.
+    # Assign a selection probability to each ship based on fitness.
     scores_sum = np.sum(fitness)
     probabilities = fitness / scores_sum
 
