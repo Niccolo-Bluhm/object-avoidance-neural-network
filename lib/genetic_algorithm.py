@@ -23,9 +23,6 @@ def select_and_evolve(space_ships):
     fitness = fitness_list[indices]
     sorted_ships = [space_ships[idx] for idx in indices]
 
-    print('\n')
-    print(fitness)
-
     # Assign a selection probability to each ship based on fitness.
     scores_sum = np.sum(fitness)
     probabilities = fitness / scores_sum

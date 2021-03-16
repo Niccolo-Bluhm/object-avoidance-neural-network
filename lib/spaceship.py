@@ -102,7 +102,7 @@ class SpaceShip:
         if self.crashed and not self.ship_won:
             self.fitness += 1
         else:
-            good_distance = abs(1 / self.distance_from_goal) * 12000
+            good_distance = abs(1 / self.distance_from_goal) * 50000
 
             # If the ship hits the white planet, its fitness value will go to infinity. Cap it to prevent this from happening.
             #good_distance = min(500, good_distance)
@@ -120,6 +120,9 @@ class SpaceShip:
         # Store the distance from the white planet (Used in fitness calculation).
         good_planet_idx = np.where(classifications == 1)[0][0]
         self.distance_from_goal = distances[good_planet_idx]
+
+        if self.distance_from_goal <= 0:
+            self.ship_won = True
 
         # Sort distances and keep the five closest objects.
         indices = np.argsort(distances)[0:5]
