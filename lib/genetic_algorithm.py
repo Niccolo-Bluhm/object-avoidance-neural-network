@@ -54,8 +54,6 @@ def select_and_evolve(space_ships):
 
 
 def mutate(ship):
-    """We are going to combine all the weights into one 1D array.
-    After chaning the weights, we need to reshape them back into their original form."""
     ship = deepcopy(ship)
 
     # The Neural network for this ship.
@@ -91,9 +89,6 @@ def mutate(ship):
 
 
 def crossover(ship1, ship2):
-    """We are going to combine all the weights into one 1D array.
-    After changing the weights, we need to reshape them back into their original form."""
-
     ship1 = deepcopy(ship1)
     ship2 = deepcopy(ship2)
 
