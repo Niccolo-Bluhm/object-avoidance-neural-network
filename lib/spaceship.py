@@ -1,9 +1,7 @@
-from copy import deepcopy
 from sklearn.neural_network import MLPClassifier
 import pygame
 import numpy as np
-from lib.genetic_algorithm import mutate, crossover, deconstruct_mlp, construct_mlp
-from lib.colors import Colors
+from lib.genetic_algorithm import deconstruct_mlp, construct_mlp
 vector = pygame.math.Vector2
 MAX_ANGLE = 180
 
@@ -22,7 +20,7 @@ class SpaceShip:
         X = np.zeros(n_inputs)
         X_train = np.array([X, X])
         y_train = np.array(range(n_output + 1))
-        self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="tanh")
+        self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="logistic")
         self.mlp.fit(X_train, y_train)
 
         # Initialize the MLP with random weights and biases between -1 and 1
@@ -138,14 +136,16 @@ class SpaceShip:
         angles_norm = angles[indices] / MAX_ANGLE
         mlp_inputs = np.concatenate((distances_norm, angles_norm, classifications))
 
-        # Make prediction based on inputs.
-        output = self.mlp.predict(mlp_inputs.reshape(1, -1))[0]
-        if output == 0:
-            direction = "left"
-        elif output == 1:
-            direction = "right"
+        # Predict how much to turn and in what direction.
+        probabilities = self.mlp.predict_proba(mlp_inputs.reshape(1, -1))[0]
+        left_amount = probabilities[0] * -self.game_settings['delta_angle']
+        right_amount = probabilities[1] * self.game_settings['delta_angle']
+        if abs(left_amount) > right_amount:
+            delta_angle = left_amount
+        else:
+            delta_angle = right_amount
 
-        return direction
+        return delta_angle
 
     def calculate_mlp_inputs(self):
         """This function calculates the neural network inputs. It checks the ships distance from all walls and planets

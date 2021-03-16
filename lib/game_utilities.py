@@ -10,6 +10,7 @@ from lib.spaceship import SpaceShip
 from lib.colors import Colors, generate_ship_colors
 from game_settings import game_settings
 vector = pygame.math.Vector2
+MARGIN = 5
 
 
 class PygView(object):
@@ -35,21 +36,27 @@ class PygView(object):
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont('mono', 20, bold=True)
+        self.font30 = pygame.font.SysFont('mono', 30, bold=True)
+        self.font22 = pygame.font.SysFont('mono', 22, bold=True)
         self.ships = []
-        for i in range(self.game_settings['num_ships']):
-            self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
+
+        if self.game_settings['ship_file'] is None:
+            # Initialize ships from scratch
+            for i in range(self.game_settings['num_ships']):
+                self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
+        else:
+            # Load pre-existing ships.
+            self.load_ships(self.game_settings['ship_file'])
+
         self.game_over = False
         self.generation = 0
-
-        if self.game_settings['ship_file'] is not None:
-            self.loadShips()
 
     def run(self):
         generation = 0
         ship_colors = generate_ship_colors(len(self.ships))
         for idx, level in enumerate(self.levels):
             level_running = True
+            max_fitness = 0
             while level_running:
                 for i, ship in enumerate(self.ships):
                     ship.level = level
@@ -59,8 +66,9 @@ class PygView(object):
                 start_time = time.time()
                 all_crashed = False
                 while not all_crashed:
+                    self.draw_text_top("Level: {} of {}".format(idx + 1, len(self.levels)),
+                                       "Max Fitness:{:0.0f}".format(max_fitness))
                     self.draw_text_bottom("Generation:{}".format(generation))
-                    self.draw_text_top(("Level: {} of {} Ships Alive: {}".format(idx, len(self.levels), 1)))
 
                     # Render the planet
                     self.render_planets(level)
@@ -78,14 +86,8 @@ class PygView(object):
                         if time.time() - start_time > self.game_settings['time_limit']:
                             ship.crashed = True
 
-                        # TODO: Have neural network scale delta angle based on output
-                        turn_direction = ship.predict()
-                        if turn_direction == "left":
-                            delta_angle = -self.game_settings["delta_angle"]
-                        elif turn_direction == "right":
-                            delta_angle = self.game_settings["delta_angle"]
-                        else:
-                            delta_angle = 0
+                        # Predict whether to turn left or right using the neural network.
+                        delta_angle = ship.predict()
 
                         # Calculate the updated ship position.
                         ship.calculate_position(delta_angle=delta_angle)
@@ -99,25 +101,31 @@ class PygView(object):
 
                     if np.all([ship.crashed for ship in self.ships]):
                         all_crashed = True
+                        max_fitness = np.max([ship.fitness for ship in self.ships])
 
                     # If a ship reached the white planet, we won the level. Advance to the next one.
                     if np.any([ship.ship_won for ship in self.ships]):
                         level_running = False
 
                 self.ships = select_and_evolve(self.ships)
+                self.save_ships()
                 generation += 1
 
         pygame.quit()
 
     def draw_text_bottom(self, text):
-        fw, fh = self.font.size(text)  # fw: font width,  fh: font height
-        surface = self.font.render(text, True, Colors.green, Colors.black)
-        self.screen.blit(surface, ((self.width - fw), (self.height - fh)))
+        fw, fh = self.font30.size(text)  # fw: font width,  fh: font height
+        surface = self.font30.render(text, True, Colors.green, Colors.black)
+        self.screen.blit(surface, ((self.width - fw - MARGIN), (self.height - fh - MARGIN)))
 
-    def draw_text_top(self, text):
-        fw, fh = self.font.size(text)  # fw: font width,  fh: font height
-        surface = self.font.render(text, True, Colors.blue, Colors.black)
-        self.screen.blit(surface, ((self.width - fw), (20 - fh)))
+    def draw_text_top(self, text1, text2):
+        fw, fh = self.font22.size(text1)  # fw: font width,  fh: font height
+        surface = self.font22.render(text1, True, Colors.blue, Colors.black)
+        self.screen.blit(surface, ((self.width - fw - MARGIN), (MARGIN)))
+
+        fw, fh = self.font22.size(text2)
+        surface = self.font22.render(text2, True, Colors.blue, Colors.black)
+        self.screen.blit(surface, ((self.width - fw - MARGIN), ( fh + MARGIN )))
 
     def render_planets(self, level):
         # Draw the white circle
@@ -132,6 +140,10 @@ class PygView(object):
         for ship in self.ships:
             ship.screen = None
         pickle.dump(self.ships, open("trained_models/saved_ships.p", "wb"))
+        for ship in self.ships:
+            ship.screen = self.screen
 
     def load_ships(self, filepath):
-        pass
+        self.ships = pickle.load( open( filepath, "rb" ) )
+        for ship in self.ships:
+            ship.screen = self.screen
