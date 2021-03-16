@@ -36,7 +36,7 @@ class PygView(object):
                 self.levels.append(json.load(json_file))
 
         pygame.init()
-        pygame.display.set_caption("Press ESC to quit")
+        pygame.display.set_caption("Neural Network Evolution")
         self.level = self.levels[0]
         self.width = self.game_settings['width']
         self.height = self.game_settings['height']
@@ -48,7 +48,6 @@ class PygView(object):
         for i in range(self.game_settings['num_ships']):
             self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
         self.game_over = False
-        self.stop_printing = False
         self.generation = 0
 
         if self.game_settings['ship_file'] is not None:
@@ -70,15 +69,10 @@ class PygView(object):
                 ship.color = ship_colors[i]
                 ship.reset_location()
 
-                weights, biases = deconstruct_mlp(ship.mlp)
-                weight_sum = np.sum(weights)
-                print(weight_sum)
-            print('\n')
-
             start_time = time.time()
             all_crashed = False
             while not all_crashed:
-                self.draw_text("Generation:{}".format(self.generation))
+                self.draw_text_bottom("Generation:{}".format(self.generation))
                 self.draw_text_top(("Level: {} of {} Ships Alive: {}".format( 1, len(self.levels), 1)))
 
                 # Render the planet
@@ -126,26 +120,17 @@ class PygView(object):
 
         pygame.quit()
 
-    def draw_text(self, text):
-        """
-        """
+    def draw_text_bottom(self, text):
         fw, fh = self.font.size(text)  # fw: font width,  fh: font height
-        surface = self.font.render(text, True, (0, 255, 0))
-        # // makes integer division in python3
+        surface = self.font.render(text, True, Colors.green, Colors.black)
         self.screen.blit(surface, ((self.width - fw), (self.height - fh)))
 
     def draw_text_top(self, text):
-        """
-        """
         fw, fh = self.font.size(text)  # fw: font width,  fh: font height
-        surface = self.font.render(text, True, (0, 255, 0))
-        # // makes integer division in python3
+        surface = self.font.render(text, True, Colors.blue, Colors.black)
         self.screen.blit(surface, ((self.width - fw), (20 - fh)))
 
     def render_planets(self, level):
-        """Draw the planet including the gaussian noise
-        to simulate erruptions"""
-
         # Draw the white circle
         pygame.draw.circle(self.screen, Colors.white, np.int64(level["center_white"]), level["radius_white"])
 

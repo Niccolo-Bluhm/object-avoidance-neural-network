@@ -102,14 +102,12 @@ class SpaceShip:
         if self.crashed and not self.ship_won:
             self.fitness += 1
         else:
-            good_distance =  abs(1 / self.distance_from_goal) * 12000
+            good_distance = abs(1 / self.distance_from_goal) * 12000
 
-            # If the ship hits the white planet, its fitness value will go to infinity. Cap it  to prevent this from happening.
-            good_distance = min(100, good_distance)
+            # If the ship hits the white planet, its fitness value will go to infinity. Cap it to prevent this from happening.
+            #good_distance = min(500, good_distance)
 
             self.fitness += good_distance + self.distance_from_red_planet
-        #print(self.fitness)
-
 
     def predict(self):
         direction = "none"

@@ -15,4 +15,4 @@
   "ship_file": null,
   "default_level": "training_levels\\Train2.txt",
   "normalize_fitness": false,
-  "hidden_layer_sizes": [7]}
+  "hidden_layer_sizes": [10,5,3]}
