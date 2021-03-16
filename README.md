@@ -1,5 +1,5 @@
 
-<p align="center"><img width=60% src="https://github.com/anfederico/Clairvoyant/blob/master/media/Clairvoyant.png"></p>
+<p align="center"><img width=60% src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/tree/master/media/demo.gif"></p>
 ### ANN's Solving a lunar lander like game.
 
 
