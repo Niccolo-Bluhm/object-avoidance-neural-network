@@ -1,5 +1,5 @@
 
-
+<p align="center"><img width=60% src="https://github.com/anfederico/Clairvoyant/blob/master/media/Clairvoyant.png"></p>
 ### ANN's Solving a lunar lander like game.
 
 

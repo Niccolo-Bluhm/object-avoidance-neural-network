@@ -21,7 +21,7 @@ class SpaceShip:
         X = np.zeros(n_inputs)
         X_train = np.array([X, X])
         y_train = np.array(range(n_output + 1))
-        self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="logistic")
+        self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="tanh")
 
         with warnings.catch_warnings():
             # Suppress the convergence warning.
@@ -42,11 +42,6 @@ class SpaceShip:
         self.crashed = False
         self.fitness = 0
         self.inputs = np.zeros(n_inputs)
-        self.fitness2 = 0
-        self.fitnessDebug = 0
-        self.sawTheGoodPlanet = False
-        self.donezo = False
-        self.debug = False
         self.max_distance = vector(self.game_settings['width'], self.game_settings['height']).length()
         self.ship_won = False
         self.distance_from_goal = float('inf')
@@ -55,40 +50,16 @@ class SpaceShip:
         self.left = vector(-5, -5)
         self.right = vector(-5, 5)
 
-    def valid_ship_position(self):
-        """This method checks that the ship is within the game window.
-
-        :return: True if ship is within the window, False otherwise
-        """
-        # Ensure the entire ship is within the window. Check all points on the ship's triangle.
-        # All x coordinates.
-        ship_x_vals = np.array([self.tip[0], self.left[0], self.right[0]])
-        # All y coordinates.
-        ship_y_vals = np.array([self.tip[1], self.left[1], self.right[1]])
-
-        # TODO: Verify width corresponds to x and height to y
-        if np.any(ship_x_vals < 0) or np.any(ship_x_vals > self.game_settings['width']):
-            return False
-        if np.any(ship_y_vals < 0) or np.any(ship_y_vals > self.game_settings['height']):
-            return False
-
-        return True
-
     def reset_location(self):
         self.pos = self.level['ship']['starting_pos']
         self.angle = self.level["ship"]['starting_angle']
         self.velocity = vector(0, 0)
         self.crashed = False
-        self.fitness2 = 0
         self.fitness = 0
-        self.sawTheGoodPlanet = False
-        self.donezo = False
         self.ship_won = False
         self.distance_from_goal = float('inf')
         self.distance_from_red_planet = 0
-
         self.update_ship_points()
-
 
     def update_fitness(self):
         """Updates the ships fitness value. Fitness is calculated at each timestep based on the ships distance from the
@@ -113,7 +84,6 @@ class SpaceShip:
             self.fitness += good_distance + self.distance_from_red_planet
 
     def predict(self):
-        direction = "none"
         distances, angles, classifications = self.calculate_mlp_inputs()
 
         # Check if the ship has crashed into anything.
@@ -142,13 +112,11 @@ class SpaceShip:
         mlp_inputs = np.concatenate((distances_norm, angles_norm, classifications))
 
         # Predict how much to turn and in what direction.
-        probabilities = self.mlp.predict_proba(mlp_inputs.reshape(1, -1))[0]
-        left_amount = probabilities[0] * -self.game_settings['delta_angle']
-        right_amount = probabilities[1] * self.game_settings['delta_angle']
-        if abs(left_amount) > right_amount:
-            delta_angle = left_amount
+        direction = self.mlp.predict(mlp_inputs.reshape(1, -1))[0]
+        if direction == 0:
+            delta_angle = -self.game_settings['delta_angle']
         else:
-            delta_angle = right_amount
+            delta_angle = self.game_settings['delta_angle']
 
         return delta_angle
 
@@ -229,4 +197,3 @@ class SpaceShip:
             self.angle += delta_angle
             self.update_ship_points()
         self.render()
-

@@ -3,13 +3,13 @@ game_settings = { # Game window size in pixels.
                   "height": 800,
 
                   # Frames per second game is limited to. To train as fast as possible, set to a really high number.
-                  "fps": 100,
+                  "fps": 600,
 
                   # Total number of ships.
                   "num_ships": 20,
 
                   # Ship manuevering settings.
-                  "delta_angle": 5,
+                  "delta_angle": 2,
                   "thrust": 0.01,
                   "speed_multiplier": 1.35,
 
@@ -17,7 +17,7 @@ game_settings = { # Game window size in pixels.
                   "dt": 5,
 
                   # Timeout before the game resets the level. Useful if ships fly around in an infinite loop.
-                  "time_limit": 10,
+                  "time_limit": 6,
 
                   # Pickled ship data to load. If set to None, ship will be trained from scratch.
                   "ship_file": None, #'trained_models/saved_ships.p'
