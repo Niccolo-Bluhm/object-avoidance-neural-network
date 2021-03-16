@@ -29,5 +29,3 @@ number of ships, the number of hidden layers in the neural network, and the game
 spaceships don't tend to generalize well to new levels and require additional training on that level to perform well.
 
 
-## Background
-
