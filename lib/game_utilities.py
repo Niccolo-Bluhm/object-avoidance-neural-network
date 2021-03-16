@@ -13,11 +13,37 @@ vector = pygame.math.Vector2
 MARGIN = 5
 
 
+def get_unique_filename():
+    name = 'saved_ships'
+    file_list = os.listdir('trained_models')
+    file_num = 0
+
+    while True:
+        filename = name + str(file_num) + '.p'
+        if filename in file_list:
+            file_num += 1
+        else:
+            return filename
+
+
 class PygView(object):
-    def __init__(self, settings_file, level_dir):
+    def __init__(self, level_dir):
         """Initialize pygame, window, background, font,...
         """
         self.game_settings = game_settings
+        pygame.init()
+        pygame.display.set_caption("Neural Network Evolution")
+        self.width = self.game_settings['width']
+        self.height = self.game_settings['height']
+        self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
+        self.background = pygame.Surface(self.screen.get_size()).convert()
+        self.clock = pygame.time.Clock()
+        self.font30 = pygame.font.SysFont('mono', 30, bold=True)
+        self.font22 = pygame.font.SysFont('mono', 22, bold=True)
+        self.ships = []
+        self.output_filename = get_unique_filename()
+        self.game_over = False
+        self.generation = 0
 
         # Load the levels
         level_files = os.listdir(level_dir)
@@ -28,28 +54,13 @@ class PygView(object):
             with open(os.path.join(level_dir, file)) as json_file:
                 self.levels.append(json.load(json_file))
 
-        pygame.init()
-        pygame.display.set_caption("Neural Network Evolution")
-        self.level = self.levels[0]
-        self.width = self.game_settings['width']
-        self.height = self.game_settings['height']
-        self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
-        self.background = pygame.Surface(self.screen.get_size()).convert()
-        self.clock = pygame.time.Clock()
-        self.font30 = pygame.font.SysFont('mono', 30, bold=True)
-        self.font22 = pygame.font.SysFont('mono', 22, bold=True)
-        self.ships = []
-
         if self.game_settings['ship_file'] is None:
-            # Initialize ships from scratch
+            # Initialize ships from scratch.
             for i in range(self.game_settings['num_ships']):
-                self.ships.append(SpaceShip(self.screen, self.level, self.game_settings))
+                self.ships.append(SpaceShip(self.screen, self.levels[0], self.game_settings))
         else:
             # Load pre-existing ships.
             self.load_ships(self.game_settings['ship_file'])
-
-        self.game_over = False
-        self.generation = 0
 
     def run(self):
         generation = 0
@@ -139,7 +150,7 @@ class PygView(object):
     def save_ships(self):
         for ship in self.ships:
             ship.screen = None
-        pickle.dump(self.ships, open("trained_models/saved_ships.p", "wb"))
+        pickle.dump(self.ships, open('trained_models/' + self.output_filename, "wb"))
         for ship in self.ships:
             ship.screen = self.screen
 

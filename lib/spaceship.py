@@ -2,6 +2,7 @@ from sklearn.neural_network import MLPClassifier
 import pygame
 import numpy as np
 from lib.genetic_algorithm import deconstruct_mlp, construct_mlp
+import warnings
 vector = pygame.math.Vector2
 MAX_ANGLE = 180
 
@@ -21,7 +22,11 @@ class SpaceShip:
         X_train = np.array([X, X])
         y_train = np.array(range(n_output + 1))
         self.mlp = MLPClassifier(hidden_layer_sizes=n_hidden, max_iter=1, activation="logistic")
-        self.mlp.fit(X_train, y_train)
+
+        with warnings.catch_warnings():
+            # Suppress the convergence warning.
+            warnings.simplefilter("ignore")
+            self.mlp.fit(X_train, y_train)
 
         # Initialize the MLP with random weights and biases between -1 and 1
         weights, biases = deconstruct_mlp(self.mlp)
