@@ -1,5 +1,5 @@
 
-<p align="center"><img width=60% src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/tree/master/media/demo.gif"></p>
+<p align="center"><img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/Learning.gif" width=40%></p>
 ### ANN's Solving a lunar lander like game.
 
 
