@@ -35,13 +35,13 @@ its distance and angle to the ship are calculated, as well as a boolean value in
 
 <div class="row">
   <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.png" alt="Classifications" style="width:30%">
+    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.png" alt="Classifications" width=33%>
   </div>
   <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/distances.png" alt="Distances" style="width:30%">
+    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/distances.png" alt="Distances" width=33%>
   </div>
   <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/angles.png" alt="Angles" width=30%>
+    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/angles.png" alt="Angles" width=33%>
   </div>
 </div> 
 
