@@ -28,4 +28,11 @@ number of ships, the number of hidden layers in the neural network, and the game
 <b>test.py</b> can be run to test your trained model on a level it has never encountered before. Unfortunately, trained 
 spaceships don't tend to generalize well to new levels and require additional training on that level to perform well.
 
+## Background
+### Neural Network Structure
+Each ship in the game can 'see' the five closest objects, whether they be the edges of the map or planets. For each obstacle, 
+its distance and angle to the ship are calculated, as well as a boolean value indicating if it should be avoided or sought out.
+
+
+<p align="center"><img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.gif" width=90%></p>
 
