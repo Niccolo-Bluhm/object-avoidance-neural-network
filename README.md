@@ -34,5 +34,5 @@ Each ship in the game can 'see' the five closest objects, whether they be the ed
 its distance and angle to the ship are calculated, as well as a boolean value indicating if it should be avoided or sought out.
 
 
-<p align="center"><img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.gif" width=90%></p>
+<p align="center"><img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.png" width=90%></p>
 
