@@ -33,16 +33,12 @@ spaceships don't tend to generalize well to new levels and require additional tr
 Each ship in the game can 'see' the five closest objects, whether they be the edges of the map or planets. For each obstacle, 
 its distance and angle to the ship are calculated, as well as a boolean value indicating if it should be avoided or sought out.
 
-<div class="row">
-  <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.png" alt="Classifications" width=33%>
-  </div>
-  <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/distances.png" alt="Distances" width=33%>
-  </div>
-  <div class="column">
-    <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/angles.png" alt="Angles" width=33%>
-  </div>
-</div> 
+
+<p float="left">
+<img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/classifications.png" width=33%>
+<img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/distances.png" width=33%>
+<img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/angles.png" width=33%>
+</p>
+
 
 
