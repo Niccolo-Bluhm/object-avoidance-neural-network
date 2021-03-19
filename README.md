@@ -12,7 +12,7 @@ a simple multi-layered neural network.
 
 
 ## Installation
-Download and install python 3.8. CD to the directory where requirements.txt is located,
+Download the source code for the project and install python 3.8. CD to the directory where requirements.txt is located,
 then run:
 
     pip install -r requirements.txt
