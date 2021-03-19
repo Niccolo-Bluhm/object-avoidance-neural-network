@@ -40,5 +40,8 @@ its distance and angle to the ship are calculated, as well as a boolean value in
 <img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/angles.png" width=30%>
 </p>
 
+These 15 values are then normalized and used as inputs to the neural network. The ship is always moving forward, and at 
+each timestep it can turn either left or right depending on the output neuron value.
 
+<p align="center"><img src="https://github.com/Niccolo-Bluhm/object-avoidance-neural-network/blob/master/media/neural_network.png" width=100%></p>
 
