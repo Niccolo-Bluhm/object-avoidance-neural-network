@@ -34,7 +34,7 @@ def select_and_evolve(space_ships):
         new_ships.append(deepcopy(sorted_ships[idx]))
 
     # Take a weighted selection of 10% of ships, mutate them, and introduce to next round (Skip crossover)
-    num_ten_percent = int(len(sorted_ships) * 0.1)
+    num_ten_percent = int(len(sorted_ships) * 0.2)
     ships_to_mutate = np.random.choice(sorted_ships, size=num_ten_percent, replace=False, p=probabilities)
     for ship in ships_to_mutate:
         new_ships.append(mutate(ship))
